@@ -1,0 +1,54 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python - Backend
+life-power-api/__pycache__/
+life-power-api/*.py[cod]
+life-power-api/venv/
+life-power-api/.venv/
+life-power-api/env/
+life-power-api/build/
+life-power-api/dist/
+life-power-api/*.egg-info/
+life-power-api/.idea/
+life-power-api/.vscode/
+
+# Flutter - Frontend
+life-power-client/build/
+life-power-client/.dart_tool/
+life-power-client/.flutter-plugins
+life-power-client/.flutter-plugins-dependencies
+life-power-client/.packages
+life-power-client/.pub-cache/
+life-power-client/pubspec.lock
+
+stitch_lifepower_prd_summary/
+LifePower_API_Spec.docx
+LifePower_Data_Structure_Spec.docx
+Untitled.pdf
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Trae
+.trae/
+
+# Railway
+railway.json

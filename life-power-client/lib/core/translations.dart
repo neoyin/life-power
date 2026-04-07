@@ -1,0 +1,248 @@
+class AppTranslations {
+  static const Map<String, Map<String, String>> translations = {
+    'en': {
+      // Common
+      'app_name': 'LifePower',
+      'cancel': 'Cancel',
+      'confirm': 'Confirm',
+      'save': 'Save',
+      'delete': 'Delete',
+      'edit': 'Edit',
+      'loading': 'Loading...',
+      'error': 'Error',
+      'success': 'Success',
+      'retry': 'Retry',
+
+      // Navigation
+      'nav_home': 'Home',
+      'nav_charge': 'Charge',
+      'nav_watching': 'Watching',
+      'nav_settings': 'Settings',
+
+      // Auth
+      'login': 'Login',
+      'logout': 'Logout',
+      'register': 'Register',
+      'email': 'Email',
+      'password': 'Password',
+      'username': 'Username',
+      'full_name': 'Full Name',
+      'no_account': "Don't have an account? Register",
+      'have_account': 'Already have an account? Login',
+      'login_success': 'Login successful',
+      'register_success': 'Register successful',
+
+      // Home
+      'current_energy': 'Current Energy',
+      'people_watching_you': 'people watching you',
+      'charge_energy': 'Charge Energy',
+      'soulful_resilience': 'Soulful Resilience',
+      'soulful_resilience_desc': 'Your energy levels are steady and grounded. A perfect time for creative focus.',
+      'rest_quality': 'Rest Quality',
+      'peak_flow': 'Peak Flow',
+      'optimal': 'Optimal',
+
+      // Charge
+      'todays_progress': "Today's Progress",
+      'walking': 'Walking',
+      'sleep': 'Sleep',
+      'steps': 'steps',
+      'hours': 'hours',
+      'manual_charge': 'Manual Charge',
+      'hold_to_sync': 'Hold to Sync',
+      'breathing': 'Breathing...',
+      'release_to_stop': 'Release to stop',
+      'tap_hold_15_seconds': 'Tap & hold for 15 seconds',
+      'drain_details': 'Drain Details',
+      'sedentary': 'Sedentary',
+      'sedentary_desc': 'Less than 5000 steps today',
+      'stayed_up_late': 'Stayed Up Late',
+      'stayed_up_late_desc': 'Sleep before midnight',
+      'zen_tip': 'Zen Tip',
+      'remaining_charges': 'Remaining Charges',
+
+      // Watchers
+      'people_watching_me': 'People Watching Me',
+      'people_i_watch': 'People I Watch',
+      'add': 'Add',
+      'send_care': 'Send Care',
+      'no_watchers': 'No watchers yet',
+      'impact': 'Impact',
+      'people_positively_influenced': 'People you positively influenced this week',
+      'energy_share': 'Energy Share',
+      'sharing_energy_status': 'Sharing energy status with',
+      'watchers': 'watchers',
+      'full_access': 'Full Access',
+      'emergency_only': 'Emergency Only',
+      'on': 'On',
+      'off': 'Off',
+
+      // Settings
+      'battery_alerts': 'Battery Alerts',
+      'low_battery_threshold': 'Low Battery Threshold',
+      'watcher_management': 'Watcher Management',
+      'privacy_data': 'Privacy & Data',
+      'steps_tracking': 'Steps Tracking',
+      'steps_tracking_desc': 'Track your daily steps',
+      'sleep_intelligence': 'Sleep Intelligence',
+      'sleep_intelligence_desc': 'Monitor your sleep patterns',
+      'live_location': 'Live Location',
+      'live_location_desc': "Share your location with watchers",
+      'danger_zone': 'Danger Zone',
+      'disconnect_delete': 'Disconnect Device & Delete Data',
+      'version': 'Version',
+
+      // Care
+      'care_messages': 'Care Messages',
+      'send_message': 'Send Message',
+      'recipient_id': 'Recipient ID',
+      'message_content': 'Message Content',
+      'reply': 'Reply',
+
+      // Life Pulse
+      'vitality_pulse': 'VITALITY PULSE',
+      'synced_with_others': 'Synced with others',
+      'harmony': 'Harmony',
+      'pulse_stability': 'Pulse Stability',
+      'aura_sync': 'Aura Sync',
+      'active': 'Active',
+      'resync_rhythm': 'Re-sync Rhythm',
+
+      // Energy levels
+      'high': 'High',
+      'medium': 'Medium',
+      'low': 'Low',
+      'energetic': 'Energetic',
+      'balanced': 'Balanced',
+      'low_battery': 'Low Battery',
+
+      // Misc
+      'welcome': 'Welcome',
+      'get_started': 'Get Started',
+    },
+    'zh': {
+      // Common
+      'app_name': '守望电量',
+      'cancel': '取消',
+      'confirm': '确认',
+      'save': '保存',
+      'delete': '删除',
+      'edit': '编辑',
+      'loading': '加载中...',
+      'error': '错误',
+      'success': '成功',
+      'retry': '重试',
+
+      // Navigation
+      'nav_home': '首页',
+      'nav_charge': '充电',
+      'nav_watching': '守望',
+      'nav_settings': '设置',
+
+      // Auth
+      'login': '登录',
+      'logout': '退出登录',
+      'register': '注册',
+      'email': '邮箱',
+      'password': '密码',
+      'username': '用户名',
+      'full_name': '姓名',
+      'no_account': '还没有账号？去注册',
+      'have_account': '已有账号？去登录',
+      'login_success': '登录成功',
+      'register_success': '注册成功',
+
+      // Home
+      'current_energy': '当前能量',
+      'people_watching_you': '人正在守望你',
+      'charge_energy': '充电',
+      'soulful_resilience': '身心韧性',
+      'soulful_resilience_desc': '你的能量水平稳定而扎实。这是创意专注的完美时机。',
+      'rest_quality': '休息质量',
+      'peak_flow': '巅峰时刻',
+      'optimal': '最佳',
+
+      // Charge
+      'todays_progress': '今日进度',
+      'walking': '步行',
+      'sleep': '睡眠',
+      'steps': '步',
+      'hours': '小时',
+      'manual_charge': '手动充电',
+      'hold_to_sync': '按住同步',
+      'breathing': '呼吸中...',
+      'release_to_stop': '松开停止',
+      'tap_hold_15_seconds': '长按15秒',
+      'drain_details': '耗电详情',
+      'sedentary': '久坐不动',
+      'sedentary_desc': '今日步数少于5000步',
+      'stayed_up_late': '熬夜',
+      'stayed_up_late_desc': '午夜前入睡',
+      'zen_tip': '禅意提示',
+      'remaining_charges': '剩余充电次数',
+
+      // Watchers
+      'people_watching_me': '守望我的人',
+      'people_i_watch': '我守望的人',
+      'add': '添加',
+      'send_care': '发送关怀',
+      'no_watchers': '暂无守望者',
+      'impact': '影响力',
+      'people_positively_influenced': '本周正面影响的人数',
+      'energy_share': '能量共享',
+      'sharing_energy_status': '正在与',
+      'watchers': '位守望者共享能量状态',
+      'full_access': '完全访问',
+      'emergency_only': '仅紧急情况',
+      'on': '开启',
+      'off': '关闭',
+
+      // Settings
+      'battery_alerts': '电量提醒',
+      'low_battery_threshold': '低电量阈值',
+      'watcher_management': '守望者管理',
+      'privacy_data': '隐私与数据',
+      'steps_tracking': '步数追踪',
+      'steps_tracking_desc': '追踪您的每日步数',
+      'sleep_intelligence': '睡眠智能',
+      'sleep_intelligence_desc': '监测您的睡眠模式',
+      'live_location': '实时位置',
+      'live_location_desc': '与守望者共享您的位置',
+      'danger_zone': '危险区域',
+      'disconnect_delete': '断开设备并删除数据',
+      'version': '版本',
+
+      // Care
+      'care_messages': '关怀消息',
+      'send_message': '发送消息',
+      'recipient_id': '接收者ID',
+      'message_content': '消息内容',
+      'reply': '回复',
+
+      // Life Pulse
+      'vitality_pulse': '活力脉搏',
+      'synced_with_others': '已与其他人同步',
+      'harmony': '身心和谐',
+      'pulse_stability': '脉搏稳定性',
+      'aura_sync': '光环同步',
+      'active': '活跃',
+      'resync_rhythm': '重新同步节奏',
+
+      // Energy levels
+      'high': '高',
+      'medium': '中',
+      'low': '低',
+      'energetic': '精力充沛',
+      'balanced': '平衡',
+      'low_battery': '电量不足',
+
+      // Misc
+      'welcome': '欢迎',
+      'get_started': '开始使用',
+    },
+  };
+
+  static String get(String key, {String locale = 'en'}) {
+    return translations[locale]?[key] ?? translations['en']?[key] ?? key;
+  }
+}

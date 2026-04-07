@@ -1,0 +1,619 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:life_power_client/core/i18n.dart';
+import 'package:life_power_client/presentation/providers/auth_provider.dart';
+import 'package:life_power_client/presentation/providers/locale_provider.dart';
+import 'package:life_power_client/presentation/widgets/threshold_slider.dart';
+import 'package:life_power_client/presentation/widgets/privacy_toggle.dart';
+
+class SettingsPage extends ConsumerStatefulWidget {
+  const SettingsPage({Key? key}) : super(key: key);
+
+  @override
+  _SettingsPageState createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends ConsumerState<SettingsPage> {
+  double _thresholdValue = 15;
+  bool _stepsTracking = true;
+  bool _sleepIntelligence = true;
+  bool _liveLocation = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFf8fafa),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          tr('nav_settings'),
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF2a3435),
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 24),
+            _buildLanguageSection(),
+            const SizedBox(height: 32),
+            _buildBatteryAlerts(),
+            const SizedBox(height: 32),
+            _buildWatcherManagement(),
+            const SizedBox(height: 32),
+            _buildPrivacyData(),
+            const SizedBox(height: 32),
+            _buildDangerZone(),
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _buildBottomNavBar(),
+    );
+  }
+
+  Widget _buildLanguageSection() {
+    final locale = ref.watch(localeProvider);
+    final isEnglish = locale.languageCode == 'en';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFffffff),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2a3435).withOpacity(0.06),
+            blurRadius: 40,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.language, color: Color(0xFF535f6f)),
+              const SizedBox(width: 8),
+              Text(
+                tr('language'),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2a3435),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildLanguageOption(
+                  'English',
+                  'EN',
+                  isEnglish,
+                  () => ref.read(localeProvider.notifier).setLocale('en'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildLanguageOption(
+                  '中文',
+                  'ZH',
+                  !isEnglish,
+                  () => ref.read(localeProvider.notifier).setLocale('zh'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(
+    String language,
+    String code,
+    bool isSelected,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF535f6f)
+              : const Color(0xFFf0f4f5),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              code,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : const Color(0xFF535f6f),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              language,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isSelected ? Colors.white : const Color(0xFF535f6f),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBatteryAlerts() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFffffff),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2a3435).withOpacity(0.06),
+            blurRadius: 40,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.notifications_active, color: Color(0xFF535f6f)),
+              const SizedBox(width: 8),
+              Text(
+                tr('battery_alerts'),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2a3435),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          ThresholdSlider(
+            value: _thresholdValue,
+            onChanged: (value) {
+              setState(() {
+                _thresholdValue = value;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWatcherManagement() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.visibility, color: Color(0xFF535f6f)),
+            const SizedBox(width: 8),
+            Text(
+              tr('watcher_management'),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2a3435),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildWatcherItem('User 1', tr('full_access'), true),
+        const SizedBox(height: 12),
+        _buildWatcherItem('User 2', tr('emergency_only'), false),
+        const SizedBox(height: 12),
+        _buildAddWatcherButton(),
+      ],
+    );
+  }
+
+  Widget _buildWatcherItem(String name, String accessType, bool isFullAccess) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFffffff),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2a3435).withOpacity(0.06),
+            blurRadius: 40,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Stack(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFd7e3f7),
+                ),
+                child: Center(
+                  child: Text(
+                    name[0].toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF535f6f),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF006f1d),
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2a3435),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isFullAccess
+                        ? const Color(0xFF006f1d).withOpacity(0.1)
+                        : const Color(0xFFfec330).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    accessType,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isFullAccess
+                          ? const Color(0xFF006f1d)
+                          : const Color(0xFFfec330),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Color(0xFF9f403d)),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.volume_off, color: Color(0xFF727d7e)),
+            onPressed: () {},
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddWatcherButton() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFf0f4f5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFd9e5e6),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.add, color: Color(0xFF535f6f)),
+          const SizedBox(width: 8),
+          Text(
+            tr('add_new'),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF535f6f),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrivacyData() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.security, color: Color(0xFF535f6f)),
+            const SizedBox(width: 8),
+            Text(
+              tr('privacy_data'),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2a3435),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFffffff),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2a3435).withOpacity(0.06),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              PrivacyToggle(
+                title: tr('steps_tracking'),
+                subtitle: tr('steps_tracking_desc'),
+                icon: Icons.directions_walk,
+                value: _stepsTracking,
+                onChanged: (value) {
+                  setState(() {
+                    _stepsTracking = value;
+                  });
+                },
+              ),
+              const Divider(height: 1),
+              PrivacyToggle(
+                title: tr('sleep_intelligence'),
+                subtitle: tr('sleep_intelligence_desc'),
+                icon: Icons.bedtime,
+                value: _sleepIntelligence,
+                onChanged: (value) {
+                  setState(() {
+                    _sleepIntelligence = value;
+                  });
+                },
+              ),
+              const Divider(height: 1),
+              PrivacyToggle(
+                title: tr('live_location'),
+                subtitle: tr('live_location_desc'),
+                icon: Icons.location_on,
+                value: _liveLocation,
+                onChanged: (value) {
+                  setState(() {
+                    _liveLocation = value;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDangerZone() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          tr('danger_zone'),
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF9f403d),
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFF9f403d).withOpacity(0.3),
+              width: 1,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    _showDeleteConfirmation();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9f403d),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: Text(tr('disconnect_delete')),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                '${tr('version')} v1.0.0',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF727d7e),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showDeleteConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(tr('delete_account')),
+          content: Text(tr('delete_confirmation')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(tr('cancel')),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                ref.read(authProvider.notifier).logout();
+                Navigator.pushReplacementNamed(context, '/login');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF9f403d),
+              ),
+              child: Text(tr('delete')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomNavBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2a3435).withOpacity(0.06),
+            blurRadius: 40,
+            offset: const Offset(0, -10),
+          ),
+        ],
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(0, Icons.bolt, tr('nav_home')),
+              _buildNavItem(1, Icons.battery_charging_full, tr('nav_charge')),
+              _buildNavItem(2, Icons.group, tr('nav_watching')),
+              _buildNavItem(3, Icons.settings, tr('nav_settings')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final isSelected = index == 3;
+    return GestureDetector(
+      onTap: () {
+        switch (index) {
+          case 0:
+            Navigator.pushNamed(context, '/');
+            break;
+          case 1:
+            Navigator.pushNamed(context, '/charge');
+            break;
+          case 2:
+            Navigator.pushNamed(context, '/watchers');
+            break;
+          case 3:
+            Navigator.pushNamed(context, '/settings');
+            break;
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFFd7e3f7).withOpacity(0.5)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected
+                  ? const Color(0xFF535f6f)
+                  : const Color(0xFF727d7e),
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: isSelected
+                    ? const Color(0xFF535f6f)
+                    : const Color(0xFF727d7e),
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
