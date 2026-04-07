@@ -3,6 +3,7 @@ class User {
   final String username;
   final String email;
   final String? fullName;
+  final String? avatarUrl;
   final String? token;
   final String? refreshToken;
 
@@ -11,6 +12,7 @@ class User {
     required this.username,
     required this.email,
     this.fullName,
+    this.avatarUrl,
     this.token,
     this.refreshToken,
   });
@@ -21,6 +23,7 @@ class User {
       username: json['username'],
       email: json['email'],
       fullName: json['full_name'],
+      avatarUrl: json['avatar_url'],
     );
   }
 
@@ -30,7 +33,28 @@ class User {
       'username': username,
       'email': email,
       'full_name': fullName,
+      'avatar_url': avatarUrl,
     };
+  }
+
+  User copyWith({
+    int? id,
+    String? username,
+    String? email,
+    String? fullName,
+    String? avatarUrl,
+    String? token,
+    String? refreshToken,
+  }) {
+    return User(
+      id: id ?? this.id,
+      username: username ?? this.username,
+      email: email ?? this.email,
+      fullName: fullName ?? this.fullName,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      token: token ?? this.token,
+      refreshToken: refreshToken ?? this.refreshToken,
+    );
   }
 }
 

@@ -38,6 +38,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._apiService) : super(AuthState());
 
   Future<void> checkAuthStatus() async {
+    final token = await _apiService.getToken();
+    if (token == null) {
+      state = AuthState();
+      return;
+    }
+
     state = state.copyWith(isLoading: true, error: null);
     try {
       final user = await _apiService.getCurrentUser();
@@ -77,5 +83,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void logout() {
     _apiService.clearAuth();
     state = AuthState();
+  }
+
+  Future<void> updateProfile({String? fullName, String? avatarUrl}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final user = await _apiService.updateProfile(
+        fullName: fullName,
+        avatarUrl: avatarUrl,
+      );
+      state = state.copyWith(user: user, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
   }
 }

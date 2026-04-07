@@ -1,7 +1,7 @@
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.models.user import User, UserAuthIdentity, UserSettings
-from app.schemas.user_schema import UserCreate, UserAuth, Token
+from app.schemas.user_schema import UserCreate, UserAuth, Token, UserUpdate
 from app.utils.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 
 
@@ -83,3 +83,18 @@ class AuthService:
             return None
         
         return auth_identity.user
+
+    @staticmethod
+    def update_user(db: Session, user_id: int, user_update: UserUpdate) -> Optional[User]:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return None
+        
+        if user_update.full_name is not None:
+            user.full_name = user_update.full_name
+        if user_update.avatar_url is not None:
+            user.avatar_url = user_update.avatar_url
+        
+        db.commit()
+        db.refresh(user)
+        return user

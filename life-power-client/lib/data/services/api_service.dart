@@ -57,6 +57,10 @@ class ApiService {
     return _prefs!.getString(Constants.storageToken);
   }
 
+  Future<String?> getToken() async {
+    return _getToken();
+  }
+
   Future<String?> _getRefreshToken() async {
     _prefs ??= await SharedPreferences.getInstance();
     return _prefs!.getString(Constants.storageRefreshToken);
@@ -110,6 +114,17 @@ class ApiService {
     final refreshToken = response.data['refresh_token'];
     await _saveToken(token);
     await _saveRefreshToken(refreshToken);
+    return User.fromJson(response.data);
+  }
+
+  Future<User> updateProfile({String? fullName, String? avatarUrl}) async {
+    final response = await _dio.put(
+      Constants.authMe,
+      data: {
+        if (fullName != null) 'full_name': fullName,
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
+      },
+    );
     return User.fromJson(response.data);
   }
 

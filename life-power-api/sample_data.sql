@@ -1,10 +1,10 @@
 -- LifePower sample data
 
 -- Insert test users
-INSERT INTO users (username, email, full_name) VALUES
-('user1', 'user1@example.com', 'Test User 1'),
-('user2', 'user2@example.com', 'Test User 2'),
-('user3', 'user3@example.com', 'Test User 3');
+INSERT INTO users (username, email, full_name, avatar_url) VALUES
+('user1', 'user1@example.com', 'Test User 1', NULL),
+('user2', 'user2@example.com', 'Test User 2', NULL),
+('user3', 'user3@example.com', 'Test User 3', NULL);
 
 -- Insert user auth identities (password: 'password123')
 INSERT INTO user_auth_identities (user_id, provider, provider_id, password_hash) VALUES

@@ -5,6 +5,7 @@ import 'package:life_power_client/presentation/providers/auth_provider.dart';
 import 'package:life_power_client/presentation/providers/locale_provider.dart';
 import 'package:life_power_client/presentation/widgets/threshold_slider.dart';
 import 'package:life_power_client/presentation/widgets/privacy_toggle.dart';
+import 'package:life_power_client/presentation/widgets/watcher_avatar.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -42,6 +43,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 24),
+            _buildUserProfileSection(),
+            const SizedBox(height: 32),
             _buildLanguageSection(),
             const SizedBox(height: 32),
             _buildBatteryAlerts(),
@@ -132,9 +135,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF535f6f)
-              : const Color(0xFFf0f4f5),
+          color: isSelected ? const Color(0xFF535f6f) : const Color(0xFFf0f4f5),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -160,6 +161,190 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildUserProfileSection() {
+    final user = ref.watch(authProvider).user;
+    final displayName = user?.fullName ?? user?.username ?? 'User';
+    final email = user?.email ?? '';
+
+    return GestureDetector(
+      onTap: () => _showEditProfileDialog(),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: const Color(0xFFffffff),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2a3435).withOpacity(0.06),
+              blurRadius: 40,
+              offset: const Offset(0, 20),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            WatcherAvatar(
+              name: displayName,
+              imageUrl: user?.avatarUrl,
+              size: 72,
+              showGradientBorder: true,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2a3435),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    email,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF727d7e),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.edit,
+                        size: 14,
+                        color: Color(0xFF535f6f),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        tr('edit_profile'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF535f6f),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: Color(0xFF727d7e),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog() {
+    final user = ref.read(authProvider).user;
+    final nameController =
+        TextEditingController(text: user?.fullName ?? user?.username ?? '');
+    final emailController = TextEditingController(text: user?.email ?? '');
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(tr('edit_profile')),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () {},
+                      child: Stack(
+                        children: [
+                          WatcherAvatar(
+                            name: nameController.text.isNotEmpty
+                                ? nameController.text
+                                : 'U',
+                            imageUrl: user?.avatarUrl,
+                            size: 80,
+                            showGradientBorder: true,
+                          ),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF535f6f),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(
+                        labelText: tr('name'),
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: emailController,
+                      decoration: InputDecoration(
+                        labelText: tr('email'),
+                        border: const OutlineInputBorder(),
+                      ),
+                      enabled: false,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading ? null : () => Navigator.pop(context),
+                  child: Text(tr('cancel')),
+                ),
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          setDialogState(() => isLoading = true);
+                          await ref.read(authProvider.notifier).updateProfile(
+                                fullName: nameController.text,
+                              );
+                          if (mounted) {
+                            Navigator.pop(context);
+                          }
+                        },
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(tr('save')),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -306,7 +491,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: isFullAccess
                         ? const Color(0xFF006f1d).withOpacity(0.1)

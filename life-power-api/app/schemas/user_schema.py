@@ -15,6 +15,7 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class UserInDB(UserBase):

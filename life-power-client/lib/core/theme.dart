@@ -111,17 +111,30 @@ class AppTheme {
     ),
   );
   
-  // 能量等级颜色
+  // 能量等级颜色 - 使用设计规范品牌颜色
   static Color getEnergyColor(String level) {
     switch (level) {
       case 'high':
-        return Colors.green;
+        return const Color(0xFF006F1D); // 活力绿 Vitality Green
       case 'medium':
-        return Colors.yellow;
+        return const Color(0xFFF1B52D); // 宁静黄 Mellow Yellow
       case 'low':
-        return Colors.red;
+        return const Color(0xFF9C4343); // 警示红 Critical Red
       default:
-        return Colors.grey;
+        return const Color(0xFF535F6F); // 沉静灰蓝 Exhausted Grey/Blue
+    }
+  }
+
+  // 根据能量百分比获取能量等级
+  static String getEnergyLevel(int score) {
+    if (score >= 70) {
+      return 'high';
+    } else if (score >= 40) {
+      return 'medium';
+    } else if (score >= 20) {
+      return 'low';
+    } else {
+      return 'exhausted';
     }
   }
 }
