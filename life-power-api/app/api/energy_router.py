@@ -1,3 +1,5 @@
+from typing import Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -25,7 +27,24 @@ def create_daily_signal(
     return signal
 
 
-@router.get("/current", response_model=EnergyCurrent)
+@router.get("/signals/daily", response_model=Optional[SignalFeature])
+def get_daily_signal(
+    date: Optional[datetime] = None,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if date is None:
+        date = datetime.utcnow()
+    
+    # 零点日期规格化 (naive datetime)
+    target_date = datetime(date.year, date.month, date.day)
+    
+    signal = SignalService.get_signal_by_date(db, current_user.id, target_date)
+    
+    return signal
+
+
+@router.get("/current", response_model=Optional[EnergyCurrent])
 def get_current_energy(
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -34,10 +53,7 @@ def get_current_energy(
     energy = EnergyEngine.get_current_energy(db, current_user.id)
     
     if not energy:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No energy data found"
-        )
+        return None
     
     # 计算守望者数量
     watcher_count = len(current_user.watcher_relations_as_target)

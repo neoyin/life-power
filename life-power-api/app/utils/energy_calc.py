@@ -21,7 +21,8 @@ def calculate_energy_score(signal: SignalFeatureDaily) -> Tuple[int, str, str, f
         "sleep_hours": 0.3,
         "active_minutes": 0.15,
         "water_intake": 0.1,
-        "mood_score": 0.25
+        "mood_score": 0.2,
+        "breathing": 0.05
     }
     
     # 计算各维度得分
@@ -53,7 +54,12 @@ def calculate_energy_score(signal: SignalFeatureDaily) -> Tuple[int, str, str, f
     if signal.mood_score is not None:
         # 情绪得分（1-10）
         mood_score = (signal.mood_score / 10) * 100
-        score += mood_score * weights["mood_score"] - 12.5
+        score += mood_score * weights["mood_score"] - 10
+        
+    if signal.breathing_sessions is not None:
+        # 呼吸训练得分 (目标：5次循环，每次+20点次元分)
+        breathing_score = min(signal.breathing_sessions / 5, 1.0) * 100
+        score += breathing_score * weights["breathing"]
     
     # 确保分数在0-100范围内
     score = max(0, min(100, score))
@@ -76,7 +82,8 @@ def calculate_energy_score(signal: SignalFeatureDaily) -> Tuple[int, str, str, f
     if signal.active_minutes is not None: data_points += 1
     if signal.water_intake is not None: data_points += 1
     if signal.mood_score is not None: data_points += 1
+    if signal.breathing_sessions is not None: data_points += 1
     
-    confidence = data_points / 5.0
+    confidence = data_points / 6.0
     
     return int(score), level, trend, confidence

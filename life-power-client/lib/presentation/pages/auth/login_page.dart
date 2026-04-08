@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:life_power_client/core/i18n.dart';
 import 'package:life_power_client/presentation/providers/auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -49,7 +50,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('登录')),
+      appBar: AppBar(title: Text(tr('login'))),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -58,20 +59,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
-                'LifePower',
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+              Text(
+                tr('app_name'),
+                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 48),
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: '邮箱',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: tr('email'),
+                  border: const OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return '请输入邮箱';
+                    return tr('enter_email');
                   }
                   return null;
                 },
@@ -79,14 +80,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: '密码',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: tr('password'),
+                  border: const OutlineInputBorder(),
                 ),
                 obscureText: true,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return '请输入密码';
+                    return tr('enter_password');
                   }
                   return null;
                 },
@@ -99,14 +100,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 50),
                       ),
-                      child: const Text('登录'),
+                      child: Text(tr('login')),
                     ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () {
                   Navigator.pushNamed(context, '/register');
                 },
-                child: const Text('还没有账号？去注册'),
+                child: Text(tr('no_account')),
               ),
               if (authState.error != null)
                 Padding(

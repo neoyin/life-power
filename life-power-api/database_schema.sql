@@ -53,8 +53,10 @@ CREATE TABLE IF NOT EXISTS signal_feature_daily (
     active_minutes INTEGER,
     water_intake INTEGER,
     mood_score INTEGER,
+    breathing_sessions INTEGER DEFAULT 0,  -- 每日呼吸训练次数
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_signal_user_date UNIQUE (user_id, date)  -- 每用户每天只有一条记录
 );
 
 -- 守望者关系表

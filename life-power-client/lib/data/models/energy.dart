@@ -20,6 +20,10 @@ class EnergySnapshot {
   });
 
   factory EnergySnapshot.fromJson(Map<String, dynamic> json) {
+    String createdAtStr = json['created_at'];
+    if (!createdAtStr.endsWith('Z') && !createdAtStr.contains('+')) {
+      createdAtStr += 'Z';
+    }
     return EnergySnapshot(
       id: json['id'],
       userId: json['user_id'],
@@ -27,7 +31,7 @@ class EnergySnapshot {
       level: json['level'],
       trend: json['trend'],
       confidence: json['confidence'],
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: DateTime.parse(createdAtStr),
     );
   }
 
@@ -78,6 +82,8 @@ class EnergyHistory {
   factory EnergyHistory.fromJson(Map<String, dynamic> json) {
     var list = json['snapshots'] as List;
     List<EnergySnapshot> snapshotList = list.map((i) => EnergySnapshot.fromJson(i)).toList();
+    // Sort snapshots chronologically (oldest to newest)
+    snapshotList.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return EnergyHistory(snapshots: snapshotList);
   }
 }
@@ -91,6 +97,7 @@ class SignalFeature {
   final int? activeMinutes;
   final int? waterIntake;
   final int? moodScore;
+  final int? breathingSessions;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -103,6 +110,7 @@ class SignalFeature {
     this.activeMinutes,
     this.waterIntake,
     this.moodScore,
+    this.breathingSessions,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -117,6 +125,7 @@ class SignalFeature {
       activeMinutes: json['active_minutes'],
       waterIntake: json['water_intake'],
       moodScore: json['mood_score'],
+      breathingSessions: json['breathing_sessions'],
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
     );
@@ -132,6 +141,7 @@ class SignalFeature {
       'active_minutes': activeMinutes,
       'water_intake': waterIntake,
       'mood_score': moodScore,
+      'breathing_sessions': breathingSessions,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -145,6 +155,7 @@ class SignalFeatureCreate {
   final int? activeMinutes;
   final int? waterIntake;
   final int? moodScore;
+  final int? breathingSessions;
 
   SignalFeatureCreate({
     required this.date,
@@ -153,6 +164,7 @@ class SignalFeatureCreate {
     this.activeMinutes,
     this.waterIntake,
     this.moodScore,
+    this.breathingSessions,
   });
 
   Map<String, dynamic> toJson() {
@@ -163,6 +175,7 @@ class SignalFeatureCreate {
       'active_minutes': activeMinutes,
       'water_intake': waterIntake,
       'mood_score': moodScore,
+      'breathing_sessions': breathingSessions,
     };
   }
 }

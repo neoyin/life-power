@@ -9,6 +9,7 @@ class SignalFeatureBase(BaseModel):
     active_minutes: Optional[int] = None
     water_intake: Optional[int] = None
     mood_score: Optional[int] = None
+    breathing_sessions: Optional[int] = None
 
 
 class SignalFeatureCreate(SignalFeatureBase):

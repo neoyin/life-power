@@ -41,8 +41,10 @@ class AppTranslations {
       'rest_quality': 'Rest Quality',
       'peak_flow': 'Peak Flow',
       'optimal': 'Optimal',
-
-      // Charge
+      'synchronized': 'Synchronized',
+      'heart_mind_harmony': 'Heart-Mind Harmony',
+      'heart_mind_harmony_desc': 'Your pulse reflects a deep state of calm awareness. Continue your current activity flow.',
+      'steps': 'steps',
       'todays_progress': "Today's Progress",
       'walking': 'Walking',
       'sleep': 'Sleep',
@@ -161,6 +163,10 @@ class AppTranslations {
       'rest_quality': '休息质量',
       'peak_flow': '巅峰时刻',
       'optimal': '最佳',
+      'synchronized': '已同步',
+      'heart_mind_harmony': '身心和谐',
+      'heart_mind_harmony_desc': '你的脉搏反映出一种深度平静意识。继续你当前的活动节奏。',
+      'steps': '步',
 
       // Charge
       'todays_progress': '今日进度',

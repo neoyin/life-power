@@ -2,8 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_power_client/data/models/user.dart';
 import 'package:life_power_client/data/services/api_service.dart';
 
-final apiServiceProvider = Provider((ref) => ApiService());
-
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(ref.watch(apiServiceProvider));
 });

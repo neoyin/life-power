@@ -49,10 +49,10 @@ class ChargeResponse {
 
   factory ChargeResponse.fromJson(Map<String, dynamic> json) {
     return ChargeResponse(
-      success: json['success'],
-      message: json['message'],
-      currentEnergy: json['current_energy'],
-      remainingCharges: json['remaining_charges'],
+      success: json['success'] ?? true,
+      message: json['message'] ?? '',
+      currentEnergy: json['current_energy'] ?? 0,
+      remainingCharges: json['remaining_charges'] ?? 0,
     );
   }
 }

@@ -1,11 +1,19 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_power_client/core/constants.dart';
 import 'package:life_power_client/core/i18n.dart';
+import 'package:life_power_client/data/services/health_data_service.dart';
+import 'package:life_power_client/data/services/api_service.dart' as api;
+import 'package:life_power_client/data/models/energy.dart';
 import 'package:life_power_client/presentation/providers/energy_provider.dart';
 import 'package:life_power_client/presentation/widgets/progress_bar.dart';
 import 'package:life_power_client/presentation/widgets/drain_card.dart';
 import 'package:life_power_client/presentation/widgets/zen_tip_card.dart';
+import 'package:life_power_client/presentation/widgets/main_navigation_bar.dart';
+
+enum BreathingState { idle, preparing, breathing, completed }
 
 class ChargePage extends ConsumerStatefulWidget {
   const ChargePage({Key? key}) : super(key: key);
@@ -14,59 +22,292 @@ class ChargePage extends ConsumerStatefulWidget {
   _ChargePageState createState() => _ChargePageState();
 }
 
-class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProviderStateMixin {
+class _ChargePageState extends ConsumerState<ChargePage> with TickerProviderStateMixin {
   late AnimationController _breathingController;
   late Animation<double> _breathingAnimation;
-  bool _isBreathing = false;
+  
+  BreathingState _state = BreathingState.idle;
+  int _completedCycles = 0;
+  Timer? _preparationTimer;
+  String _instructionText = '';
+  
   bool _mounted = true;
+  int _todaySteps = 0;
+  double _sleepHours = 0;
+  int _remainingCharges = 3;
+  SignalFeature? _latestSignal;
 
   @override
   void initState() {
     super.initState();
     _breathingController = AnimationController(
-      duration: Constants.breathingAnimationDuration,
+      duration: const Duration(milliseconds: 2500), // 2.5s per phase (inhale/exhale)
       vsync: this,
-    )..repeat(reverse: true);
-    _breathingAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
+    );
+    
+    _breathingAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
       CurvedAnimation(
         parent: _breathingController,
         curve: Curves.easeInOut,
       ),
     );
+
+    _breathingController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _breathingController.reverse();
+        setState(() => _instructionText = tr('exhale'));
+      } else if (status == AnimationStatus.dismissed) {
+        if (_state == BreathingState.breathing) {
+          _completedCycles++;
+          if (_completedCycles >= 3) {
+            _finishBreathing();
+          } else {
+            _breathingController.forward();
+            setState(() => _instructionText = tr('inhale'));
+          }
+        }
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadHealthData();
+      _loadRemainingCharges();
+    });
+  }
+
+  Future<void> _loadHealthData() async {
+    final healthService = ref.read(healthDataServiceProvider);
+    final apiService = ref.read(api.apiServiceProvider);
+
+    final healthData = await healthService.syncHealthData();
+    if (mounted && healthData != null) {
+      setState(() {
+        _todaySteps = healthData.steps;
+        _sleepHours = healthData.sleepHours ?? 0;
+      });
+
+      await apiService.createSignal(
+        SignalFeatureCreate(
+          date: healthData.date,
+          steps: healthData.steps,
+        ),
+      );
+    }
+
+    try {
+      final signal = await apiService.getDailySignal();
+      if (_mounted) {
+        setState(() {
+          _latestSignal = signal;
+          _todaySteps = signal?.steps ?? _todaySteps;
+          _sleepHours = signal?.sleepHours ?? _sleepHours;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _mounted = false;
+    _preparationTimer?.cancel();
     _breathingController.dispose();
     super.dispose();
   }
 
-  void _startBreathing() {
-    if (!_mounted) return;
-    setState(() {
-      _isBreathing = true;
-    });
-    _breathingController.forward();
+  void _handleTapDown(TapDownDetails details) {
+    if (_state != BreathingState.idle) return;
 
-    Future.delayed(Constants.breathingAnimationDuration, () {
-      if (!_mounted) return;
-      setState(() {
-        _isBreathing = false;
-      });
-      _breathingController.stop();
-      _chargeEnergy('breathing');
+    setState(() {
+      _state = BreathingState.preparing;
+      _instructionText = tr('prepare_breathing');
+    });
+
+    _preparationTimer = Timer(const Duration(seconds: 3), () {
+      if (_state == BreathingState.preparing) {
+        _startBreathingCycles();
+      }
     });
   }
 
+  void _handleTapUp(TapUpDetails details) {
+    if (_state == BreathingState.preparing) {
+      _abortBreathing();
+    } else if (_state == BreathingState.completed) {
+      setState(() => _state = BreathingState.idle);
+    }
+  }
+
+  void _handleTapCancel() {
+    if (_state == BreathingState.preparing) {
+      _abortBreathing();
+    }
+  }
+
+  void _startBreathingCycles() {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _state = BreathingState.breathing;
+      _completedCycles = 0;
+      _instructionText = tr('inhale');
+    });
+    _breathingController.forward();
+  }
+
+  void _abortBreathing() {
+    _preparationTimer?.cancel();
+    _breathingController.stop();
+    _breathingController.reset();
+    setState(() {
+      _state = BreathingState.idle;
+      _instructionText = '';
+      _completedCycles = 0;
+    });
+  }
+
+  void _finishBreathing() {
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _state = BreathingState.completed;
+      _instructionText = tr('synchronized');
+    });
+    
+    // Show motivational feedback
+    _showBreathingFeedback();
+    
+    // Sync and Charge (persistent via incrementBreathing)
+    ref.read(api.apiServiceProvider).incrementBreathing().then((_) {
+      ref.read(energyProvider.notifier).getCurrentEnergy();
+      _loadHealthData();
+    });
+  }
+
+  void _showBreathingFeedback() {
+    final random = DateTime.now().millisecondsSinceEpoch % 6 + 1;
+    final message = tr('breathing_done_$random');
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF006f1d).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.self_improvement,
+                  color: Color(0xFF006f1d),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2a3435),
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: Colors.white,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: 8,
+        duration: const Duration(seconds: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      ),
+    );
+  }
+
   void _chargeEnergy(String method) {
-    ref.read(energyProvider.notifier).chargeEnergy(method);
+    ref.read(energyProvider.notifier).chargeEnergy(method).then((_) {
+      final energyState = ref.read(energyProvider);
+      if (mounted) {
+        setState(() {
+          _remainingCharges = energyState.remainingCharges ?? 0;
+        });
+        _showChargeFeedback(energyState.remainingCharges ?? 0);
+      }
+    });
+  }
+
+  Future<void> _loadRemainingCharges() async {
+    try {
+      final limit = await ref.read(api.apiServiceProvider).getDailyChargeLimit();
+      if (mounted) {
+        setState(() {
+          _remainingCharges = limit.remainingCharges;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _showChargeFeedback(int remaining) {
+    final message = remaining > 0
+        ? '${tr('charge_success')} ($remaining ${tr('charges_remaining')})'
+        : tr('charge_limit_reached');
+    final color = remaining > 0 ? const Color(0xFF006f1d) : const Color(0xFF9f403d);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  remaining > 0 ? Icons.bolt : Icons.battery_alert,
+                  color: color,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2a3435),
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: Colors.white,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: 8,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final energyState = ref.watch(energyProvider);
-
     return Scaffold(
       backgroundColor: const Color(0xFFf8fafa),
       appBar: AppBar(
@@ -101,7 +342,7 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavBar(),
+      bottomNavigationBar: MainNavigationBar(currentIndex: 1),
     );
   }
 
@@ -136,8 +377,8 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
               ProgressBar(
                 icon: Icons.directions_walk,
                 label: tr('walking'),
-                value: 7429,
-                maxValue: 10000,
+                value: _todaySteps,
+                maxValue: Constants.targetSteps,
                 unit: tr('steps'),
                 progressColor: const Color(0xFF006f1d),
               ),
@@ -145,8 +386,8 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
               ProgressBar(
                 icon: Icons.bedtime,
                 label: tr('sleep'),
-                value: 8.4,
-                maxValue: 9,
+                value: _sleepHours > 0 ? _sleepHours : 8.4,
+                maxValue: Constants.targetSleep + 1.0,
                 unit: tr('hours'),
                 progressColor: const Color(0xFF535f6f),
               ),
@@ -158,16 +399,38 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
   }
 
   Widget _buildBreathingButton() {
+    Color ringColor;
+    switch (_state) {
+      case BreathingState.preparing:
+        ringColor = const Color(0xFF535f6f);
+        break;
+      case BreathingState.breathing:
+        ringColor = const Color(0xFFfe8983);
+        break;
+      case BreathingState.completed:
+        ringColor = const Color(0xFF006f1d);
+        break;
+      case BreathingState.idle:
+      default:
+        ringColor = const Color(0xFFfe8983);
+    }
+
     return Center(
       child: Column(
         children: [
           GestureDetector(
-            onTap: _isBreathing ? null : _startBreathing,
+            onTapDown: _handleTapDown,
+            onTapUp: _handleTapUp,
+            onTapCancel: _handleTapCancel,
             child: AnimatedBuilder(
               animation: _breathingAnimation,
               builder: (context, child) {
+                double scale = (_state == BreathingState.breathing) 
+                    ? _breathingAnimation.value 
+                    : (_state == BreathingState.preparing ? 1.1 : 1.0);
+                
                 return Transform.scale(
-                  scale: _breathingAnimation.value,
+                  scale: scale,
                   child: Container(
                     width: 200,
                     height: 200,
@@ -175,15 +438,15 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
                         colors: [
-                          const Color(0xFFfe8983).withOpacity(0.3),
-                          const Color(0xFFfe8983).withOpacity(0.8),
+                          ringColor.withOpacity(0.3),
+                          ringColor.withOpacity(0.8),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFfe8983).withOpacity(0.2),
+                          color: ringColor.withOpacity(0.2),
                           blurRadius: 40,
                           offset: const Offset(0, 20),
                         ),
@@ -193,20 +456,21 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.favorite,
-                            size: 64,
-                            color: _isBreathing ? Colors.white : const Color(0xFFfe8983),
-                          ),
-                          const SizedBox(height: 8),
                           Text(
-                            _isBreathing ? tr('breathing') : tr('hold_to_sync'),
-                            style: TextStyle(
+                            _state == BreathingState.idle ? tr('hold_to_sync') : _instructionText,
+                            style: const TextStyle(
                               fontSize: 14,
-                              color: _isBreathing ? Colors.white : const Color(0xFFfe8983),
+                              color: Colors.white,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1,
                             ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Icon(
+                            _state == BreathingState.completed ? Icons.check_circle : Icons.favorite,
+                            size: 64,
+                            color: Colors.white,
                           ),
                         ],
                       ),
@@ -216,29 +480,23 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
               },
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            _isBreathing ? tr('release_to_stop') : tr('tap_hold_15_seconds'),
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF566162),
-              letterSpacing: 1,
-            ),
-          ),
         ],
       ),
     );
   }
 
   Widget _buildManualChargeButton() {
+    final bool isDisabled = _remainingCharges <= 0;
     return SizedBox(
       width: double.infinity,
       height: 64,
       child: ElevatedButton(
-        onPressed: () => _chargeEnergy('manual'),
+        onPressed: isDisabled ? null : () => _chargeEnergy('manual'),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF535f6f),
+          backgroundColor: isDisabled ? const Color(0xFFb0b8bf) : const Color(0xFF535f6f),
           foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFFd9e0e6),
+          disabledForegroundColor: const Color(0xFF9aa3ab),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -249,7 +507,19 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
           children: [
             const Icon(Icons.battery_charging_full, size: 24),
             const SizedBox(width: 12),
-            Text(tr('manual_charge'))
+            Text(tr('manual_charge')),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$_remainingCharges/3',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ),
           ],
         ),
       ),
@@ -257,6 +527,78 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
   }
 
   Widget _buildDrainDetails() {
+    List<Widget> drainCards = [];
+
+    // Steps (Sedentary)
+    if (_todaySteps < 5000) {
+      double missing = (8000 - _todaySteps) / 8000.0;
+      int drain = (missing * 15).round().clamp(1, 15);
+      drainCards.add(
+        DrainCard(
+          title: tr('sedentary'),
+          subtitle: tr('sedentary_desc'),
+          percentage: drain,
+          icon: Icons.chair,
+        ),
+      );
+      drainCards.add(const SizedBox(height: 12));
+    }
+
+    // Sleep (Insufficient / Late)
+    if (_sleepHours > 0 && _sleepHours < 6.0) {
+      int drain = ((7.0 - _sleepHours) * 8).round().clamp(1, 15);
+      drainCards.add(
+        DrainCard(
+          title: tr('insufficient_sleep'),
+          subtitle: tr('insufficient_sleep_desc'),
+          percentage: drain,
+          icon: Icons.nightlight,
+        ),
+      );
+      drainCards.add(const SizedBox(height: 12));
+    }
+
+    // Water (Dehydrated)
+    if (_latestSignal != null && _latestSignal!.waterIntake != null) {
+      int water = _latestSignal!.waterIntake!;
+      if (water < 1000) {
+        int drain = ((2000 - water) / 2000.0 * 10).round().clamp(1, 10);
+        drainCards.add(
+          DrainCard(
+            title: tr('dehydrated'),
+            subtitle: tr('dehydrated_desc'),
+            percentage: drain,
+            icon: Icons.water_drop,
+          ),
+        );
+        drainCards.add(const SizedBox(height: 12));
+      }
+    }
+
+    // Mood (Low Mood)
+    if (_latestSignal != null && _latestSignal!.moodScore != null) {
+      int mood = _latestSignal!.moodScore!;
+      if (mood < 5) {
+        int drain = ((5 - mood) * 3).clamp(1, 15);
+        drainCards.add(
+          DrainCard(
+            title: tr('low_mood'),
+            subtitle: tr('low_mood_desc'),
+            percentage: drain,
+            icon: Icons.mood_bad,
+          ),
+        );
+        drainCards.add(const SizedBox(height: 12));
+      }
+    }
+
+    if (drainCards.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Remove the last SizedBox
+    drainCards.removeLast();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -269,111 +611,30 @@ class _ChargePageState extends ConsumerState<ChargePage> with SingleTickerProvid
           ),
         ),
         const SizedBox(height: 16),
-        DrainCard(
-          title: tr('sedentary'),
-          subtitle: tr('sedentary_desc'),
-          percentage: 15,
-          icon: Icons.chair,
-        ),
-        const SizedBox(height: 12),
-        DrainCard(
-          title: tr('stayed_up_late'),
-          subtitle: tr('stayed_up_late_desc'),
-          percentage: 8,
-          icon: Icons.nightlight,
-        ),
+        ...drainCards,
       ],
     );
   }
 
   Widget _buildZenTip() {
+    String tipKey = 'zen_tip_general_1';
+    
+    if (_latestSignal != null && _latestSignal!.moodScore != null && _latestSignal!.moodScore! < 5) {
+      tipKey = 'zen_tip_mood';
+    } else if (_sleepHours > 0 && _sleepHours < 6.0) {
+      tipKey = 'zen_tip_sleep';
+    } else if (_latestSignal != null && _latestSignal!.waterIntake != null && _latestSignal!.waterIntake! < 1000) {
+      tipKey = 'zen_tip_water';
+    } else if (_todaySteps < 5000) {
+      tipKey = 'zen_tip_move';
+    } else {
+      final random = DateTime.now().millisecondsSinceEpoch % 3 + 1;
+      tipKey = 'zen_tip_general_$random';
+    }
+
     return ZenTipCard(
-      message: tr('zen_tip'),
-    );
-  }
-
-  Widget _buildBottomNavBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2a3435).withOpacity(0.06),
-            blurRadius: 40,
-            offset: const Offset(0, -10),
-          ),
-        ],
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(context, 0, Icons.bolt, tr('nav_home')),
-              _buildNavItem(context, 1, Icons.battery_charging_full, tr('nav_charge')),
-              _buildNavItem(context, 2, Icons.group, tr('nav_watching')),
-              _buildNavItem(context, 3, Icons.settings, tr('nav_settings')),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(BuildContext context, int index, IconData icon, String label) {
-    final isSelected = index == 1;
-    return GestureDetector(
-      onTap: () {
-        switch (index) {
-          case 0:
-            Navigator.pushNamed(context, '/');
-            break;
-          case 1:
-            Navigator.pushNamed(context, '/charge');
-            break;
-          case 2:
-            Navigator.pushNamed(context, '/watchers');
-            break;
-          case 3:
-            Navigator.pushNamed(context, '/settings');
-            break;
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFFd7e3f7).withOpacity(0.5)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected
-                  ? const Color(0xFF535f6f)
-                  : const Color(0xFF727d7e),
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: isSelected
-                    ? const Color(0xFF535f6f)
-                    : const Color(0xFF727d7e),
-                letterSpacing: 1,
-              ),
-            ),
-          ],
-        ),
-      ),
+      title: tr('zen_tip'),
+      message: tr(tipKey),
     );
   }
 }

@@ -1,7 +1,7 @@
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.models.user import User, UserAuthIdentity, UserSettings
-from app.schemas.user_schema import UserCreate, UserAuth, Token, UserUpdate
+from app.schemas.user_schema import UserCreate, UserAuth, Token, UserUpdate, UserSettingsUpdate
 from app.utils.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 
 
@@ -98,3 +98,24 @@ class AuthService:
         db.commit()
         db.refresh(user)
         return user
+
+    @staticmethod
+    def get_user_settings(db: Session, user_id: int) -> Optional[UserSettings]:
+        return db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+
+    @staticmethod
+    def update_user_settings(db: Session, user_id: int, settings_update: UserSettingsUpdate) -> Optional[UserSettings]:
+        settings = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+        if not settings:
+            return None
+        
+        if settings_update.low_energy_threshold is not None:
+            settings.low_energy_threshold = settings_update.low_energy_threshold
+        if settings_update.enable_notifications is not None:
+            settings.enable_notifications = settings_update.enable_notifications
+        if settings_update.share_energy_data is not None:
+            settings.share_energy_data = settings_update.share_energy_data
+        
+        db.commit()
+        db.refresh(settings)
+        return settings

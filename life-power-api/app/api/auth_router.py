@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import List
 from app.database import get_db
-from app.schemas.user_schema import User, UserCreate, UserAuth, LoginResponse, UserUpdate
+from app.schemas.user_schema import User, UserCreate, UserAuth, LoginResponse, UserUpdate, UserSettings, UserSettingsUpdate
 from app.services.auth_service import AuthService
 from app.api.deps import get_current_user
 from app.models.user import User as UserModel
@@ -47,6 +48,18 @@ def get_current_user_info(current_user: UserModel = Depends(get_current_user)):
     return current_user
 
 
+@router.get("/search", response_model=List[User])
+def search_users(
+    query: str,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    users = db.query(UserModel).filter(
+        (UserModel.username.contains(query)) | (UserModel.full_name.contains(query))
+    ).filter(UserModel.id != current_user.id).limit(10).all()
+    return users
+
+
 @router.put("/me", response_model=User)
 def update_current_user_info(
     user_update: UserUpdate,
@@ -55,3 +68,32 @@ def update_current_user_info(
 ):
     updated_user = AuthService.update_user(db, current_user.id, user_update)
     return updated_user
+
+
+@router.get("/settings", response_model=UserSettings)
+def get_user_settings(
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    settings = AuthService.get_user_settings(db, current_user.id)
+    if not settings:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User settings not found"
+        )
+    return settings
+
+
+@router.put("/settings", response_model=UserSettings)
+def update_user_settings(
+    settings_update: UserSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    updated_settings = AuthService.update_user_settings(db, current_user.id, settings_update)
+    if not updated_settings:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User settings not found"
+        )
+    return updated_settings

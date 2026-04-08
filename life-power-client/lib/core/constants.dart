@@ -1,12 +1,13 @@
 class Constants {
   // API 端点
-  static const String baseUrl = 'http://localhost:8000';
-  //static const String baseUrl = 'https://power-api-production.up.railway.app/';
-
+  //static const String baseUrl = 'http://localhost:8000';
+  static const String baseUrl = 'https://power-api-production.up.railway.app/';
+  //static const String baseUrl = 'http://10.53.238.238:8000/';
   // API 路径
   static const String authRegister = '/auth/register';
   static const String authLogin = '/auth/login';
   static const String authMe = '/auth/me';
+  static const String authSettings = '/auth/settings';
   static const String energyCurrent = '/energy/current';
   static const String energyHistory = '/energy/history';
   static const String energySignal = '/energy/signals/daily';
@@ -32,8 +33,15 @@ class Constants {
   static const String storageToken = 'auth_token';
   static const String storageRefreshToken = 'refresh_token';
   static const String storageUserId = 'user_id';
+  static const String storageLowEnergyThreshold = 'low_energy_threshold';
+  static const String storageShareEnergyData = 'share_energy_data';
+  static const String storageEnableNotifications = 'enable_notifications';
 
   // 动画时长
   static const Duration animationDuration = Duration(milliseconds: 500);
   static const Duration breathingAnimationDuration = Duration(seconds: 15);
+
+  // 健康目标
+  static const int targetSteps = 8000;
+  static const double targetSleep = 8.0;
 }

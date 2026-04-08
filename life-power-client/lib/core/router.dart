@@ -4,6 +4,7 @@ import 'package:life_power_client/presentation/pages/charge/charge_page.dart';
 import 'package:life_power_client/presentation/pages/watchers/watchers_page.dart';
 import 'package:life_power_client/presentation/pages/care/care_page.dart';
 import 'package:life_power_client/presentation/pages/settings/settings_page.dart';
+import 'package:life_power_client/presentation/pages/watchers/watcher_search_page.dart';
 import 'package:life_power_client/presentation/pages/auth/login_page.dart';
 import 'package:life_power_client/presentation/pages/auth/register_page.dart';
 
@@ -24,6 +25,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CarePage());
       case '/settings':
         return MaterialPageRoute(builder: (_) => const SettingsPage());
+      case '/watcher_search':
+        return MaterialPageRoute(builder: (_) => const WatcherSearchPage());
       default:
         return MaterialPageRoute(builder: (_) => const HomePage());
     }

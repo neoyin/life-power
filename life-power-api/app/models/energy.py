@@ -30,6 +30,7 @@ class SignalFeatureDaily(Base):
     active_minutes = Column(Integer, nullable=True)
     water_intake = Column(Integer, nullable=True)  # in ml
     mood_score = Column(Integer, nullable=True)  # 1-10
+    breathing_sessions = Column(Integer, default=0) # count of breathing cycles
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

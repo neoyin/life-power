@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_power_client/core/constants.dart';
 import 'package:life_power_client/data/models/user.dart';
+import 'package:life_power_client/data/models/user_settings.dart';
 import 'package:life_power_client/data/models/energy.dart';
 import 'package:life_power_client/data/models/watcher.dart';
 import 'package:life_power_client/data/models/charge.dart';
@@ -12,7 +13,7 @@ final apiServiceProvider = Provider<ApiService>((ref) => ApiService());
 
 class ApiService {
   final Dio _dio = Dio();
-  SharedPreferences? _prefs;
+  SharedPreferences? _sharedPrefs;
 
   ApiService() {
     _dio.options.baseUrl = Constants.baseUrl;
@@ -52,9 +53,14 @@ class ApiService {
     ));
   }
 
+  Future<SharedPreferences> _getPrefs() async {
+    _sharedPrefs ??= await SharedPreferences.getInstance();
+    return _sharedPrefs!;
+  }
+
   Future<String?> _getToken() async {
-    _prefs ??= await SharedPreferences.getInstance();
-    return _prefs!.getString(Constants.storageToken);
+    final prefs = await _getPrefs();
+    return prefs.getString(Constants.storageToken);
   }
 
   Future<String?> getToken() async {
@@ -62,29 +68,29 @@ class ApiService {
   }
 
   Future<String?> _getRefreshToken() async {
-    _prefs ??= await SharedPreferences.getInstance();
-    return _prefs!.getString(Constants.storageRefreshToken);
+    final prefs = await _getPrefs();
+    return prefs.getString(Constants.storageRefreshToken);
   }
 
   Future<void> _saveToken(String token) async {
-    _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(Constants.storageToken, token);
+    final prefs = await _getPrefs();
+    await prefs.setString(Constants.storageToken, token);
   }
 
   Future<void> _saveRefreshToken(String refreshToken) async {
-    _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.setString(Constants.storageRefreshToken, refreshToken);
+    final prefs = await _getPrefs();
+    await prefs.setString(Constants.storageRefreshToken, refreshToken);
   }
 
   Future<void> _clearTokens() async {
-    _prefs ??= await SharedPreferences.getInstance();
-    await _prefs!.remove(Constants.storageToken);
-    await _prefs!.remove(Constants.storageRefreshToken);
-    await _prefs!.remove(Constants.storageUserId);
+    final prefs = await _getPrefs();
+    await prefs.remove(Constants.storageToken);
+    await prefs.remove(Constants.storageRefreshToken);
+    await prefs.remove(Constants.storageUserId);
   }
 
-  void clearAuth() {
-    _clearTokens();
+  Future<void> clearAuth() async {
+    await _clearTokens();
   }
 
   // 认证相关
@@ -128,6 +134,41 @@ class ApiService {
     return User.fromJson(response.data);
   }
 
+  Future<List<User>> searchUsers(String query) async {
+    final response = await _dio.get(
+      '/auth/search',
+      queryParameters: {'query': query},
+    );
+    var list = response.data as List;
+    return list.map((i) => User.fromJson(i)).toList();
+  }
+
+  // 用户设置相关
+  Future<UserSettings?> getUserSettings() async {
+    try {
+      final response = await _dio.get(Constants.authSettings);
+      return UserSettings.fromJson(response.data);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<UserSettings> updateUserSettings({
+    int? lowEnergyThreshold,
+    bool? enableNotifications,
+    bool? shareEnergyData,
+  }) async {
+    final response = await _dio.put(
+      Constants.authSettings,
+      data: {
+        if (lowEnergyThreshold != null) 'low_energy_threshold': lowEnergyThreshold,
+        if (enableNotifications != null) 'enable_notifications': enableNotifications,
+        if (shareEnergyData != null) 'share_energy_data': shareEnergyData,
+      },
+    );
+    return UserSettings.fromJson(response.data);
+  }
+
   // 能量相关
   Future<EnergyCurrent> getCurrentEnergy() async {
     final response = await _dio.get(Constants.energyCurrent);
@@ -148,6 +189,16 @@ class ApiService {
       data: signal.toJson(),
     );
     return SignalFeature.fromJson(response.data);
+  }
+
+  Future<SignalFeature?> getDailySignal() async {
+    try {
+      final dateStr = DateTime.now().toIso8601String();
+      final response = await _dio.get(Constants.energySignal, queryParameters: {'date': dateStr});
+      return SignalFeature.fromJson(response.data);
+    } catch (e) {
+      return null;
+    }
   }
 
   // 守望者相关
@@ -222,6 +273,20 @@ class ApiService {
       queryParameters: {'method': method},
     );
     return ChargeResponse.fromJson(response.data);
+  }
+
+  Future<SignalFeature> incrementBreathing() async {
+    // 1. Get current signal
+    final daily = await getDailySignal();
+    final currentSessions = daily?.breathingSessions ?? 0;
+    
+    // 2. Create signal with incremented count
+    return createSignal(
+      SignalFeatureCreate(
+        date: DateTime.now(),
+        breathingSessions: currentSessions + 1,
+      ),
+    );
   }
 
   Future<DailyChargeLimit> getDailyChargeLimit() async {

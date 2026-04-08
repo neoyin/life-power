@@ -3,9 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_power_client/core/i18n.dart';
 import 'package:life_power_client/presentation/providers/auth_provider.dart';
 import 'package:life_power_client/presentation/providers/locale_provider.dart';
+import 'package:life_power_client/presentation/providers/user_settings_provider.dart';
 import 'package:life_power_client/presentation/widgets/threshold_slider.dart';
 import 'package:life_power_client/presentation/widgets/privacy_toggle.dart';
 import 'package:life_power_client/presentation/widgets/watcher_avatar.dart';
+import 'package:life_power_client/presentation/widgets/main_navigation_bar.dart';
+import 'package:life_power_client/presentation/providers/energy_provider.dart';
+import 'package:life_power_client/data/services/health_data_service.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -15,13 +19,29 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  double _thresholdValue = 15;
-  bool _stepsTracking = true;
-  bool _sleepIntelligence = true;
-  bool _liveLocation = false;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSettings();
+    });
+  }
+
+  void _loadSettings() {
+    final authState = ref.read(authProvider);
+    if (authState.user != null) {
+      ref.read(userSettingsProvider.notifier).loadSettings();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final settingsState = ref.watch(userSettingsProvider);
+    final settings = settingsState.settings;
+    final thresholdValue = settings?.lowEnergyThreshold.toDouble() ?? 30.0;
+    final stepsTracking = settings?.shareEnergyData ?? true;
+    final sleepIntelligence = settings?.enableNotifications ?? true;
+
     return Scaffold(
       backgroundColor: const Color(0xFFf8fafa),
       appBar: AppBar(
@@ -47,18 +67,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             const SizedBox(height: 32),
             _buildLanguageSection(),
             const SizedBox(height: 32),
-            _buildBatteryAlerts(),
+            _buildBatteryAlerts(
+              thresholdValue,
+              (value) {},
+              (value) {
+                ref.read(userSettingsProvider.notifier).updateSettings(
+                      lowEnergyThreshold: value.round(),
+                    );
+              },
+            ),
             const SizedBox(height: 32),
             _buildWatcherManagement(),
             const SizedBox(height: 32),
-            _buildPrivacyData(),
+            _buildPrivacyData(
+              stepsTracking,
+              sleepIntelligence,
+              (value) {
+                ref.read(userSettingsProvider.notifier).updateSettings(
+                      shareEnergyData: value,
+                    );
+              },
+              (value) {
+                ref.read(userSettingsProvider.notifier).updateSettings(
+                      enableNotifications: value,
+                    );
+              },
+            ),
             const SizedBox(height: 32),
             _buildDangerZone(),
             const SizedBox(height: 100),
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavBar(),
+      bottomNavigationBar: MainNavigationBar(currentIndex: 3),
     );
   }
 
@@ -348,7 +389,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Widget _buildBatteryAlerts() {
+  Widget _buildBatteryAlerts(double thresholdValue,
+      ValueChanged<double> onChanged, ValueChanged<double> onChangeEnd) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -382,12 +424,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           const SizedBox(height: 24),
           ThresholdSlider(
-            value: _thresholdValue,
-            onChanged: (value) {
-              setState(() {
-                _thresholdValue = value;
-              });
-            },
+            value: thresholdValue,
+            onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
           ),
         ],
       ),
@@ -395,6 +434,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Widget _buildWatcherManagement() {
+    final myWatchers = ref.watch(energyProvider).myWatchers ?? [];
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -413,9 +454,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ],
         ),
         const SizedBox(height: 16),
-        _buildWatcherItem('User 1', tr('full_access'), true),
-        const SizedBox(height: 12),
-        _buildWatcherItem('User 2', tr('emergency_only'), false),
+        if (myWatchers.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFffffff),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
+              child: Text(
+                tr('no_watchers'),
+                style: const TextStyle(color: Color(0xFF727d7e)),
+              ),
+            ),
+          )
+        else
+          ...myWatchers.map((watcher) => _buildWatcherItem(
+                watcher.username, 
+                tr('full_access'), 
+                true
+              )),
         const SizedBox(height: 12),
         _buildAddWatcherButton(),
       ],
@@ -556,7 +614,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Widget _buildPrivacyData() {
+  Widget _buildPrivacyData(
+    bool stepsTracking,
+    bool sleepIntelligence,
+    ValueChanged<bool> onStepsTrackingChanged,
+    ValueChanged<bool> onSleepIntelligenceChanged,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -573,6 +636,78 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 16),
+        FutureBuilder<bool>(
+          future: ref.read(healthDataServiceProvider).hasPermission(),
+          builder: (context, snapshot) {
+            final isGranted = snapshot.data ?? false;
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isGranted
+                    ? const Color(0xFF006f1d).withOpacity(0.1)
+                    : const Color(0xFFff4d6d).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isGranted ? Icons.check_circle : Icons.error_outline,
+                    color: isGranted
+                        ? const Color(0xFF006f1d)
+                        : const Color(0xFFff4d6d),
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr('permission_status'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2a3435),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isGranted ? tr('permission_granted') : tr('permission_not_granted'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isGranted
+                                ? const Color(0xFF006f1d)
+                                : const Color(0xFFff4d6d),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!isGranted)
+                    ElevatedButton(
+                      onPressed: () async {
+                        await ref
+                            .read(healthDataServiceProvider)
+                            .requestPermissions();
+                        ref.refresh(healthDataServiceProvider);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF535f6f),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                      ),
+                      child: Text(tr('grant_permission')),
+                    ),
+                ],
+              ),
+            );
+          },
         ),
         const SizedBox(height: 16),
         Container(
@@ -593,36 +728,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 title: tr('steps_tracking'),
                 subtitle: tr('steps_tracking_desc'),
                 icon: Icons.directions_walk,
-                value: _stepsTracking,
-                onChanged: (value) {
-                  setState(() {
-                    _stepsTracking = value;
-                  });
-                },
+                value: stepsTracking,
+                onChanged: onStepsTrackingChanged,
               ),
               const Divider(height: 1),
               PrivacyToggle(
                 title: tr('sleep_intelligence'),
                 subtitle: tr('sleep_intelligence_desc'),
                 icon: Icons.bedtime,
-                value: _sleepIntelligence,
-                onChanged: (value) {
-                  setState(() {
-                    _sleepIntelligence = value;
-                  });
-                },
+                value: sleepIntelligence,
+                onChanged: onSleepIntelligenceChanged,
               ),
               const Divider(height: 1),
               PrivacyToggle(
                 title: tr('live_location'),
                 subtitle: tr('live_location_desc'),
                 icon: Icons.location_on,
-                value: _liveLocation,
-                onChanged: (value) {
-                  setState(() {
-                    _liveLocation = value;
-                  });
-                },
+                value: false,
+                onChanged: (value) {},
               ),
             ],
           ),
@@ -657,6 +780,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           child: Column(
             children: [
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {
+                    ref.read(authProvider.notifier).logout();
+                    Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF535f6f)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: Text(tr('logout')),
+                ),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -718,88 +859,4 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Widget _buildBottomNavBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2a3435).withOpacity(0.06),
-            blurRadius: 40,
-            offset: const Offset(0, -10),
-          ),
-        ],
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(0, Icons.bolt, tr('nav_home')),
-              _buildNavItem(1, Icons.battery_charging_full, tr('nav_charge')),
-              _buildNavItem(2, Icons.group, tr('nav_watching')),
-              _buildNavItem(3, Icons.settings, tr('nav_settings')),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = index == 3;
-    return GestureDetector(
-      onTap: () {
-        switch (index) {
-          case 0:
-            Navigator.pushNamed(context, '/');
-            break;
-          case 1:
-            Navigator.pushNamed(context, '/charge');
-            break;
-          case 2:
-            Navigator.pushNamed(context, '/watchers');
-            break;
-          case 3:
-            Navigator.pushNamed(context, '/settings');
-            break;
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFFd7e3f7).withOpacity(0.5)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected
-                  ? const Color(0xFF535f6f)
-                  : const Color(0xFF727d7e),
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: isSelected
-                    ? const Color(0xFF535f6f)
-                    : const Color(0xFF727d7e),
-                letterSpacing: 1,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

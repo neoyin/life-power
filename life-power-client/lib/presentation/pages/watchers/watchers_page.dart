@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_power_client/core/i18n.dart';
 import 'package:life_power_client/presentation/providers/energy_provider.dart';
+import 'package:life_power_client/data/services/api_service.dart';
 import 'package:life_power_client/presentation/widgets/energy_status_dot.dart';
 import 'package:life_power_client/presentation/widgets/watcher_avatar.dart';
+import 'package:life_power_client/presentation/widgets/main_navigation_bar.dart';
+import 'package:life_power_client/data/models/watcher.dart';
 
 class WatchersPage extends ConsumerStatefulWidget {
   const WatchersPage({Key? key}) : super(key: key);
@@ -13,6 +16,14 @@ class WatchersPage extends ConsumerStatefulWidget {
 }
 
 class _WatchersPageState extends ConsumerState<WatchersPage> {
+  final _emailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -43,7 +54,7 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
           IconButton(
             icon: const Icon(Icons.person_add, color: Color(0xFF535f6f)),
             onPressed: () {
-              _showAddWatcherDialog();
+              Navigator.pushNamed(context, '/watcher_search');
             },
           ),
         ],
@@ -54,22 +65,22 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 24),
-            _buildPeopleWatchingMe(),
+            _buildPeopleWatchingMe(energyState),
             const SizedBox(height: 32),
             _buildPeopleIWatch(energyState),
             const SizedBox(height: 32),
-            _buildImpactCard(),
+            _buildImpactCard(energyState),
             const SizedBox(height: 32),
-            _buildEnergyShareCard(),
+            _buildEnergyShareCard(energyState),
             const SizedBox(height: 100),
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavBar(),
+      bottomNavigationBar: MainNavigationBar(currentIndex: 2),
     );
   }
 
-  Widget _buildPeopleWatchingMe() {
+  Widget _buildPeopleWatchingMe(EnergyState energyState) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -87,30 +98,15 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
-              WatcherAvatar(
-                name: 'User 1',
-                size: 64,
-                showGradientBorder: true,
-              ),
-              const SizedBox(width: 16),
-              WatcherAvatar(
-                name: 'User 2',
-                size: 64,
-                showGradientBorder: true,
-              ),
-              const SizedBox(width: 16),
-              WatcherAvatar(
-                name: 'User 3',
-                size: 64,
-                showGradientBorder: true,
-              ),
-              const SizedBox(width: 16),
-              WatcherAvatar(
-                name: 'User 4',
-                size: 64,
-                showGradientBorder: true,
-              ),
-              const SizedBox(width: 16),
+              ...(energyState.myWatchers ?? []).map((watcher) => Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: WatcherAvatar(
+                  name: watcher.username,
+                  imageUrl: watcher.avatarUrl,
+                  size: 64,
+                  showGradientBorder: true,
+                ),
+              )),
               WatcherAvatar(
                 name: tr('add'),
                 size: 64,
@@ -254,7 +250,7 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
     );
   }
 
-  Widget _buildImpactCard() {
+  Widget _buildImpactCard(EnergyState energyState) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -286,9 +282,9 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            '12',
-            style: TextStyle(
+          Text(
+            '${energyState.myWatchers?.length ?? 0}',
+            style: const TextStyle(
               fontSize: 48,
               fontWeight: FontWeight.w800,
               color: Colors.white,
@@ -307,7 +303,7 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
     );
   }
 
-  Widget _buildEnergyShareCard() {
+  Widget _buildEnergyShareCard(EnergyState energyState) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -351,7 +347,7 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${tr('sharing_energy_status')} 8 ${tr('watchers')}',
+                  '${tr('sharing_energy_status')} ${energyState.myWatchers?.length ?? 0} ${tr('watchers')}',
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF566162),
@@ -381,20 +377,50 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
   }
 
   void _showAddWatcherDialog() {
+    _emailController.clear();
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: Text(tr('add')),
-          content: Text(tr('no_watchers')),
+          content: TextField(
+            controller: _emailController,
+            decoration: InputDecoration(
+              hintText: tr('enter_user_id'),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            keyboardType: TextInputType.number,
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(tr('cancel')),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(tr('add')),
+              onPressed: () async {
+                final idStr = _emailController.text.trim();
+                if (idStr.isNotEmpty) {
+                  final targetId = int.tryParse(idStr);
+                  if (targetId != null) {
+                    try {
+                      final apiService = ref.read(apiServiceProvider);
+                      await apiService.inviteWatcher(WatcherRelationCreate(targetId: targetId));
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(tr('invitation_sent'))),
+                      );
+                      ref.read(energyProvider.notifier).getWatchers();
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(tr('invitation_failed'))),
+                      );
+                    }
+                  }
+                }
+              },
+              child: Text(tr('confirm')),
             ),
           ],
         );
@@ -456,88 +482,4 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
     }
   }
 
-  Widget _buildBottomNavBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2a3435).withOpacity(0.06),
-            blurRadius: 40,
-            offset: const Offset(0, -10),
-          ),
-        ],
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(context, 0, Icons.bolt, tr('nav_home')),
-              _buildNavItem(context, 1, Icons.battery_charging_full, tr('nav_charge')),
-              _buildNavItem(context, 2, Icons.group, tr('nav_watching')),
-              _buildNavItem(context, 3, Icons.settings, tr('nav_settings')),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(BuildContext context, int index, IconData icon, String label) {
-    final isSelected = index == 2;
-    return GestureDetector(
-      onTap: () {
-        switch (index) {
-          case 0:
-            Navigator.pushNamed(context, '/');
-            break;
-          case 1:
-            Navigator.pushNamed(context, '/charge');
-            break;
-          case 2:
-            Navigator.pushNamed(context, '/watchers');
-            break;
-          case 3:
-            Navigator.pushNamed(context, '/settings');
-            break;
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFFd7e3f7).withOpacity(0.5)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected
-                  ? const Color(0xFF535f6f)
-                  : const Color(0xFF727d7e),
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: isSelected
-                    ? const Color(0xFF535f6f)
-                    : const Color(0xFF727d7e),
-                letterSpacing: 1,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

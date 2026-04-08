@@ -5,6 +5,7 @@ class ThresholdSlider extends StatelessWidget {
   final double min;
   final double max;
   final ValueChanged<double> onChanged;
+  final ValueChanged<double>? onChangeEnd;
   final String label;
   final String unit;
 
@@ -14,6 +15,7 @@ class ThresholdSlider extends StatelessWidget {
     this.min = 5,
     this.max = 50,
     required this.onChanged,
+    this.onChangeEnd,
     this.label = 'Low Battery Threshold',
     this.unit = '%',
   });
@@ -80,6 +82,7 @@ class ThresholdSlider extends StatelessWidget {
             min: min,
             max: max,
             onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
           ),
         ),
         const SizedBox(height: 8),

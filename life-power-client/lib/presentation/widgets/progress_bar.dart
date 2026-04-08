@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 class ProgressBar extends StatelessWidget {
   final IconData icon;
   final String label;
-  final double value;
-  final double maxValue;
+  final num value;
+  final num maxValue;
   final String unit;
   final Color progressColor;
   final Color backgroundColor;
@@ -49,7 +49,7 @@ class ProgressBar extends StatelessWidget {
               ],
             ),
             Text(
-              '${value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1)} / $maxValue $unit',
+              '${value is int ? value : value.toStringAsFixed(1)} / $maxValue $unit',
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,

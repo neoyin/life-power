@@ -3,6 +3,7 @@ import 'package:life_power_client/data/models/energy.dart';
 import 'package:life_power_client/data/models/watcher.dart';
 import 'package:life_power_client/data/services/api_service.dart';
 import 'package:life_power_client/data/models/charge.dart';
+import 'package:life_power_client/data/models/user.dart';
 
 final energyProvider = StateNotifierProvider<EnergyNotifier, EnergyState>((ref) {
   return EnergyNotifier(ref.watch(apiServiceProvider));
@@ -12,6 +13,7 @@ class EnergyState {
   final EnergyCurrent? currentEnergy;
   final EnergyHistory? history;
   final List<WatcherInfo>? watchers;
+  final List<User>? myWatchers;
   final List<CareMessage>? careMessages;
   final int remainingCharges;
   final bool isLoading;
@@ -21,6 +23,7 @@ class EnergyState {
     this.currentEnergy,
     this.history,
     this.watchers,
+    this.myWatchers,
     this.careMessages,
     this.remainingCharges = 3,
     this.isLoading = false,
@@ -31,6 +34,7 @@ class EnergyState {
     EnergyCurrent? currentEnergy,
     EnergyHistory? history,
     List<WatcherInfo>? watchers,
+    List<User>? myWatchers,
     List<CareMessage>? careMessages,
     int? remainingCharges,
     bool? isLoading,
@@ -40,6 +44,7 @@ class EnergyState {
       currentEnergy: currentEnergy ?? this.currentEnergy,
       history: history ?? this.history,
       watchers: watchers ?? this.watchers,
+      myWatchers: myWatchers ?? this.myWatchers,
       careMessages: careMessages ?? this.careMessages,
       remainingCharges: remainingCharges ?? this.remainingCharges,
       isLoading: isLoading ?? this.isLoading,
@@ -104,7 +109,12 @@ class EnergyNotifier extends StateNotifier<EnergyState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final watchers = await _apiService.getWatching();
-      state = state.copyWith(watchers: watchers, isLoading: false);
+      final myWatchers = await _apiService.getMyWatchers();
+      state = state.copyWith(
+        watchers: watchers,
+        myWatchers: myWatchers,
+        isLoading: false,
+      );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
