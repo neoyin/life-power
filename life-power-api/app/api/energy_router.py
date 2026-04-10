@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.api.deps import get_current_user
 from app.models.user import User as UserModel
+from app.models.watcher import WatcherRelation
 from app.schemas.energy_schema import SignalFeature, SignalFeatureCreate, EnergyCurrent, EnergyHistory
 from app.services.signal_service import SignalService
 from app.services.energy_engine import EnergyEngine
@@ -70,10 +71,39 @@ def get_current_energy(
 @router.get("/history", response_model=EnergyHistory)
 def get_energy_history(
     days: int = 7,
+    user_id: Optional[int] = None,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # 如果没有指定user_id，返回当前用户的能量历史
+    if user_id is None:
+        target_user_id = current_user.id
+    else:
+        target_user_id = user_id
+        # 检查是否为互关关系
+        if target_user_id != current_user.id:
+            # 检查当前用户是否在守望目标用户
+            is_watching = db.query(WatcherRelation).filter(
+                WatcherRelation.watcher_id == current_user.id,
+                WatcherRelation.target_id == target_user_id,
+                WatcherRelation.status == "accepted"
+            ).first()
+
+            # 检查目标用户是否在守望当前用户
+            is_watched_by = db.query(WatcherRelation).filter(
+                WatcherRelation.watcher_id == target_user_id,
+                WatcherRelation.target_id == current_user.id,
+                WatcherRelation.status == "accepted"
+            ).first()
+
+            # 如果不是互关关系，拒绝访问
+            if not is_watching or not is_watched_by:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only view energy history of mutual watchers"
+                )
+
     # 获取能量历史
-    snapshots = EnergyEngine.get_energy_history(db, current_user.id, days)
-    
+    snapshots = EnergyEngine.get_energy_history(db, target_user_id, days)
+
     return EnergyHistory(snapshots=snapshots)

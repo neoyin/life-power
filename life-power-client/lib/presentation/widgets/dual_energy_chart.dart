@@ -3,23 +3,27 @@ import 'package:flutter/material.dart';
 import 'package:life_power_client/data/models/energy.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
-class EnergyChart extends StatefulWidget {
-  final EnergyHistory history;
+class DualEnergyChart extends StatefulWidget {
+  final EnergyHistory myHistory;
+  final EnergyHistory? otherHistory;
 
-  const EnergyChart({super.key, required this.history});
+  const DualEnergyChart({
+    super.key,
+    required this.myHistory,
+    this.otherHistory,
+  });
 
   @override
-  State<EnergyChart> createState() => _EnergyChartState();
+  State<DualEnergyChart> createState() => _DualEnergyChartState();
 }
 
-class _EnergyChartState extends State<EnergyChart> {
+class _DualEnergyChartState extends State<DualEnergyChart> {
   late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    // Scroll to the end after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -35,27 +39,31 @@ class _EnergyChartState extends State<EnergyChart> {
 
   @override
   Widget build(BuildContext context) {
-    // Limit to 72 points
-    final snapshots = widget.history.snapshots.length > 72
-        ? widget.history.snapshots.sublist(widget.history.snapshots.length - 72)
-        : widget.history.snapshots;
+    final mySnapshots = widget.myHistory.snapshots.length > 72
+        ? widget.myHistory.snapshots.sublist(widget.myHistory.snapshots.length - 72)
+        : widget.myHistory.snapshots;
 
-    final limitedHistory = EnergyHistory(snapshots: snapshots);
+    List<EnergySnapshot>? otherSnapshots;
+    if (widget.otherHistory != null) {
+      otherSnapshots = widget.otherHistory!.snapshots.length > 72
+          ? widget.otherHistory!.snapshots.sublist(widget.otherHistory!.snapshots.length - 72)
+          : widget.otherHistory!.snapshots;
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
-        // 10 points per screen or at least enough for visible items
-        final pointWidth = (screenWidth - 40) / 7; // show 7 items at once
-        final totalWidth = pointWidth * (snapshots.length - 1).clamp(6, 71);
-        final chartHeight = constraints.maxHeight;
+        final pointWidth = (screenWidth - 40) / 7;
+        final myCount = mySnapshots.length;
+        final otherCount = otherSnapshots?.length ?? 0;
+        final maxCount = myCount > otherCount ? myCount : otherCount;
+        final totalWidth = pointWidth * (maxCount - 1).clamp(6, 71);
 
         return Padding(
           padding: const EdgeInsets.only(top: 20, bottom: 30, right: 16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Fixed Y-Axis Labels
               SizedBox(
                 width: 35,
                 child: Column(
@@ -71,7 +79,6 @@ class _EnergyChartState extends State<EnergyChart> {
                 ),
               ),
               const SizedBox(width: 4),
-              // Scrollable Chart Content
               Expanded(
                 child: SingleChildScrollView(
                   controller: _scrollController,
@@ -82,10 +89,13 @@ class _EnergyChartState extends State<EnergyChart> {
                         ? (screenWidth - 40)
                         : totalWidth,
                     child: CustomPaint(
-                      painter: EnergyChartPainter(
-                        history: limitedHistory,
-                        primaryColor: const Color(0xFF535f6f),
-                        secondaryColor: const Color(0xFFd7e3f7),
+                      painter: DualEnergyChartPainter(
+                        mySnapshots: mySnapshots,
+                        otherSnapshots: otherSnapshots,
+                        myPrimaryColor: const Color(0xFF535f6f),
+                        mySecondaryColor: const Color(0xFFd7e3f7),
+                        otherPrimaryColor: const Color(0xFF006f1d),
+                        otherSecondaryColor: const Color(0xFFa8e6cf),
                       ),
                     ),
                   ),
@@ -99,51 +109,56 @@ class _EnergyChartState extends State<EnergyChart> {
   }
 }
 
-class EnergyChartPainter extends CustomPainter {
-  final EnergyHistory history;
-  final Color primaryColor;
-  final Color secondaryColor;
+class DualEnergyChartPainter extends CustomPainter {
+  final List<EnergySnapshot> mySnapshots;
+  final List<EnergySnapshot>? otherSnapshots;
+  final Color myPrimaryColor;
+  final Color mySecondaryColor;
+  final Color otherPrimaryColor;
+  final Color otherSecondaryColor;
 
-  EnergyChartPainter({
-    required this.history,
-    required this.primaryColor,
-    required this.secondaryColor,
+  DualEnergyChartPainter({
+    required this.mySnapshots,
+    this.otherSnapshots,
+    required this.myPrimaryColor,
+    required this.mySecondaryColor,
+    required this.otherPrimaryColor,
+    required this.otherSecondaryColor,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (history.snapshots.isEmpty) return;
-
-    final double height = size.height;
-    final double width = size.width;
-    final int count = history.snapshots.length;
-    final double stepX = count > 1 ? width / (count - 1) : width;
-
-    // Draw horizontal grid lines
     _drawGridLines(canvas, size);
 
-    // Prepare paths
+    _drawLine(canvas, size, mySnapshots, myPrimaryColor, mySecondaryColor, true);
+
+    if (otherSnapshots != null && otherSnapshots!.isNotEmpty) {
+      _drawLine(canvas, size, otherSnapshots!, otherPrimaryColor, otherSecondaryColor, false);
+    }
+
+    _drawXLabels(canvas, size, mySnapshots);
+  }
+
+  void _drawLine(Canvas canvas, Size size, List<EnergySnapshot> snapshots, Color primaryColor, Color secondaryColor, bool isMyLine) {
+    if (snapshots.isEmpty) return;
+
+    final int count = snapshots.length;
+    final double stepX = count > 1 ? size.width / (count - 1) : size.width;
+
     final path = Path();
     final fillPath = Path();
-
     final points = <Offset>[];
-    final colors = <Color>[];
-    final stops = <double>[];
 
     for (int i = 0; i < count; i++) {
-      final snapshot = history.snapshots[i];
+      final snapshot = snapshots[i];
       final x = i * stepX;
-      final y = height - (snapshot.score / 100.0 * height);
+      final y = size.height - (snapshot.score / 100.0 * size.height);
       points.add(Offset(x, y));
-
-      // Dynamic colors
-      colors.add(_getScoreColor(snapshot.score));
-      stops.add(i / (count - 1).clamp(1, count));
     }
 
     if (points.isNotEmpty) {
       path.moveTo(points[0].dx, points[0].dy);
-      fillPath.moveTo(points[0].dx, height);
+      fillPath.moveTo(points[0].dx, size.height);
       fillPath.lineTo(points[0].dx, points[0].dy);
 
       for (int i = 0; i < points.length - 1; i++) {
@@ -169,18 +184,13 @@ class EnergyChartPainter extends CustomPainter {
           p2.dy,
         );
       }
-      fillPath.lineTo(points.last.dx, height);
+      fillPath.lineTo(points.last.dx, size.height);
       fillPath.close();
     }
 
-    final gradient = LinearGradient(
-      colors: colors.length > 1 ? colors : [colors[0], colors[0]],
-      stops: stops.length > 1 ? stops : [0.0, 1.0],
-    ).createShader(Rect.fromLTRB(0, 0, width, height));
-
     final paint = Paint()
-      ..shader = gradient
-      ..strokeWidth = 3
+      ..color = primaryColor
+      ..strokeWidth = isMyLine ? 3 : 2.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
@@ -189,18 +199,17 @@ class EnergyChartPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          _getScoreColor(history.snapshots.last.score).withOpacity(0.3),
-          _getScoreColor(history.snapshots.last.score).withOpacity(0.0),
+          primaryColor.withOpacity(isMyLine ? 0.3 : 0.2),
+          primaryColor.withOpacity(0.0),
         ],
-      ).createShader(Rect.fromLTRB(0, 0, width, height));
+      ).createShader(Rect.fromLTRB(0, 0, size.width, size.height));
 
     canvas.drawPath(fillPath, fillPaint);
     canvas.drawPath(path, paint);
 
-    // Draw points
     for (int i = 0; i < points.length; i++) {
       final pointPaint = Paint()
-        ..color = colors[i]
+        ..color = primaryColor
         ..style = PaintingStyle.fill;
 
       final pointBorderPaint = Paint()
@@ -208,18 +217,9 @@ class EnergyChartPainter extends CustomPainter {
         ..strokeWidth = 2
         ..style = PaintingStyle.stroke;
 
-      canvas.drawCircle(points[i], 4, pointPaint);
-      canvas.drawCircle(points[i], 4, pointBorderPaint);
+      canvas.drawCircle(points[i], isMyLine ? 4 : 3, pointPaint);
+      canvas.drawCircle(points[i], isMyLine ? 4 : 3, pointBorderPaint);
     }
-
-    // Draw X-axis labels
-    _drawXLabels(canvas, size, stepX);
-  }
-
-  Color _getScoreColor(int score) {
-    if (score >= 70) return const Color(0xFF006f1d);
-    if (score >= 40) return const Color(0xFFfec330);
-    return const Color(0xFF9f403d);
   }
 
   void _drawGridLines(Canvas canvas, Size size) {
@@ -235,17 +235,19 @@ class EnergyChartPainter extends CustomPainter {
     }
   }
 
-  void _drawXLabels(Canvas canvas, Size size, double stepX) {
+  void _drawXLabels(Canvas canvas, Size size, List<EnergySnapshot> snapshots) {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
-    int skip = history.snapshots.length > 20 ? 6 : 2;
-    if (history.snapshots.length <= 10) skip = 1;
+    int skip = snapshots.length > 20 ? 6 : 2;
+    if (snapshots.length <= 10) skip = 1;
 
-    for (int i = 0; i < history.snapshots.length; i++) {
-      if (i % skip != 0 && i != history.snapshots.length - 1) continue;
+    final double stepX = snapshots.length > 1 ? size.width / (snapshots.length - 1) : size.width;
+
+    for (int i = 0; i < snapshots.length; i++) {
+      if (i % skip != 0 && i != snapshots.length - 1) continue;
 
       final x = i * stepX;
-      final date = history.snapshots[i].createdAt.toLocal();
+      final date = snapshots[i].createdAt.toLocal();
 
       final label = DateFormat('MM/dd').format(date) +
           '\n' +

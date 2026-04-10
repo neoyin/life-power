@@ -1,8 +1,8 @@
 class Constants {
   // API 端点
   //static const String baseUrl = 'http://localhost:8000';
-  static const String baseUrl = 'https://power-api-production.up.railway.app/';
-  //static const String baseUrl = 'http://10.53.238.238:8000/';
+  //static const String baseUrl = 'https://power-api-production.up.railway.app/';
+  static const String baseUrl = 'http://10.53.238.238:8000/';
   // API 路径
   static const String authRegister = '/auth/register';
   static const String authLogin = '/auth/login';
@@ -11,6 +11,7 @@ class Constants {
   static const String energyCurrent = '/energy/current';
   static const String energyHistory = '/energy/history';
   static const String energySignal = '/energy/signals/daily';
+  static const String energyUserHistory = '/energy/history';
   static const String watcherInvite = '/watchers/invite';
   static const String watcherResponse = '/watchers/response';
   static const String watcherMyWatchers = '/watchers/my-watchers';

@@ -6,7 +6,9 @@ import 'package:life_power_client/data/services/api_service.dart';
 import 'package:life_power_client/presentation/widgets/energy_status_dot.dart';
 import 'package:life_power_client/presentation/widgets/watcher_avatar.dart';
 import 'package:life_power_client/presentation/widgets/main_navigation_bar.dart';
+import 'package:life_power_client/presentation/widgets/care_message_dialog.dart';
 import 'package:life_power_client/data/models/watcher.dart';
+import 'package:life_power_client/data/models/user.dart';
 
 class WatchersPage extends ConsumerStatefulWidget {
   const WatchersPage({Key? key}) : super(key: key);
@@ -65,6 +67,8 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 24),
+            _buildPendingRequests(energyState),
+            const SizedBox(height: 32),
             _buildPeopleWatchingMe(energyState),
             const SizedBox(height: 32),
             _buildPeopleIWatch(energyState),
@@ -77,6 +81,118 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
         ),
       ),
       bottomNavigationBar: MainNavigationBar(currentIndex: 2),
+    );
+  }
+
+  Widget _buildPendingRequests(EnergyState energyState) {
+    final pendingRequests = energyState.pendingRequests ?? [];
+    if (pendingRequests.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.pending_actions,
+                color: Color(0xFFfec330), size: 20),
+            const SizedBox(width: 8),
+            Text(
+              tr('pending_requests'),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2a3435),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9f403d),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${pendingRequests.length}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        ...pendingRequests.map((request) => _buildPendingRequestItem(request)),
+      ],
+    );
+  }
+
+  Widget _buildPendingRequestItem(dynamic request) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFfff8e6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFfec330).withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          WatcherAvatar(
+            name: 'U${request.watcherId}',
+            size: 48,
+            showGradientBorder: false,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'User #${request.watcherId}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2a3435),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  tr('wants_to_watch_you'),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF566162),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.check_circle, color: Color(0xFF006f1d)),
+                onPressed: () {
+                  ref
+                      .read(energyProvider.notifier)
+                      .respondToRequest(request.id, 'accepted');
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.cancel, color: Color(0xFF9f403d)),
+                onPressed: () {
+                  ref
+                      .read(energyProvider.notifier)
+                      .respondToRequest(request.id, 'rejected');
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -94,27 +210,68 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 100,
+          height: 120,
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
               ...(energyState.myWatchers ?? []).map((watcher) => Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: WatcherAvatar(
-                  name: watcher.username,
-                  imageUrl: watcher.avatarUrl,
-                  size: 64,
-                  showGradientBorder: true,
-                ),
-              )),
-              WatcherAvatar(
-                name: tr('add'),
-                size: 64,
-                isAddButton: true,
-                onTap: () {
-                  _showAddWatcherDialog();
-                },
-              ),
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        WatcherAvatar(
+                          name: watcher.username,
+                          imageUrl: watcher.avatarUrl,
+                          size: 64,
+                          showGradientBorder: true,
+                          onTap: () => _navigateToUserDetail(watcher),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 68,
+                          child: Text(
+                            watcher.username,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF566162),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+               Column(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 children: [
+                   WatcherAvatar(
+                    name: tr('add'),
+                    size: 64,
+                    isAddButton: true,
+                    onTap: () {
+                      _showAddWatcherDialog();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: 68,
+                    child: Text(
+                      tr('add'),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF566162),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                 ]
+               ),
             ],
           ),
         ),
@@ -166,84 +323,164 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
   }
 
   Widget _buildWatcherItem(watcher) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFffffff),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2a3435).withOpacity(0.06),
-            blurRadius: 40,
-            offset: const Offset(0, 20),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Stack(
-            children: [
-              WatcherAvatar(
-                name: watcher.username,
-                size: 56,
-                showGradientBorder: true,
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _getEnergyStatusColor(watcher.energyLevel),
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 2,
+    return GestureDetector(
+      onTap: () => _navigateToWatcherDetail(watcher),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFffffff),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2a3435).withOpacity(0.06),
+              blurRadius: 40,
+              offset: const Offset(0, 20),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Stack(
+              children: [
+                WatcherAvatar(
+                  name: watcher.username,
+                  size: 56,
+                  showGradientBorder: true,
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _getEnergyStatusColor(watcher.energyLevel),
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  watcher.username,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2a3435),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                EnergyLevelBadge(level: watcher.energyLevel),
               ],
             ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    watcher.username,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2a3435),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  EnergyLevelBadge(level: watcher.energyLevel),
+                ],
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                _showSendCareDialog(watcher);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF535f6f),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+              child: Text(
+                tr('send_care'),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateToWatcherDetail(dynamic watcher) {
+    Navigator.pushNamed(
+      context,
+      '/watcher_detail',
+      arguments: {
+        'userId': watcher.user_id,
+      },
+    );
+  }
+
+  void _navigateToUserDetail(User user) {
+    Navigator.pushNamed(
+      context,
+      '/watcher_detail',
+      arguments: {
+        'userId': user.id,
+      },
+    );
+  }
+
+  void _showRemoveConfirmation(watcher) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('remove_watcher')),
+        content: Text('${tr('remove_watcher_confirm')} ${watcher.username}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr('cancel')),
           ),
           ElevatedButton(
             onPressed: () {
-              _showSendCareDialog(watcher);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(tr('watcher_removed'))),
+              );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF535f6f),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              backgroundColor: const Color(0xFF9f403d),
             ),
-            child: Text(
-              tr('send_care'),
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
+            child: Text(tr('remove')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRemoveUserConfirmation(User user) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('remove_watcher')),
+        content: Text('${tr('remove_watcher_confirm')} ${user.username}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(tr('watcher_removed'))),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9f403d),
             ),
+            child: Text(tr('remove')),
           ),
         ],
       ),
@@ -406,7 +643,8 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
                   if (targetId != null) {
                     try {
                       final apiService = ref.read(apiServiceProvider);
-                      await apiService.inviteWatcher(WatcherRelationCreate(targetId: targetId));
+                      await apiService.inviteWatcher(
+                          WatcherRelationCreate(targetId: targetId));
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text(tr('invitation_sent'))),
@@ -429,39 +667,28 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
   }
 
   void _showSendCareDialog(watcher) {
-    showDialog(
+    CareMessageDialog.show(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('${tr('send_care')} ${watcher.username}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildCareOption('You matter!', Icons.favorite),
-              _buildCareOption('Take care!', Icons.health_and_safety),
-              _buildCareOption('You are strong!', Icons.bolt),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(tr('cancel')),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildCareOption(String message, IconData icon) {
-    return ListTile(
-      leading: Icon(icon, color: const Color(0xFF535f6f)),
-      title: Text(message),
-      onTap: () {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+      recipientName: watcher.username,
+      recipientId: watcher.user_id,
+      onSend: (message) async {
+        try {
+          final apiService = ref.read(apiServiceProvider);
+          await apiService.sendCareMessage(
+            CareMessageCreate(recipientId: watcher.user_id, content: message),
+          );
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('${tr('care_sent')}: $message')),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(tr('error'))),
+            );
+          }
+        }
       },
     );
   }
@@ -481,5 +708,4 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
         return const Color(0xFF727d7e);
     }
   }
-
 }

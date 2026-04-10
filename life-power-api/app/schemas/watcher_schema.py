@@ -56,3 +56,22 @@ class WatcherInfo(BaseModel):
     energy_score: int
     energy_level: str
     status: str
+
+
+class CareStats(BaseModel):
+    sent_count: int
+    received_count: int
+
+
+class UserDetailResponse(BaseModel):
+    user_id: int
+    username: str
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    energy_score: int
+    energy_level: str
+    relation_status: str  # "none", "pending", "watching", "mutual"
+    relation_id: Optional[int] = None
+    relation_created_at: Optional[datetime] = None
+    care_stats: CareStats
+    days_tracking: int

@@ -5,6 +5,14 @@ import 'package:life_power_client/data/models/user.dart';
 import 'package:life_power_client/data/models/watcher.dart';
 import 'package:life_power_client/data/services/api_service.dart';
 import 'package:life_power_client/presentation/providers/energy_provider.dart';
+import 'package:life_power_client/presentation/widgets/watcher_avatar.dart';
+
+enum UserRelationStatus {
+  none,
+  watchingMe,
+  watching,
+  pending,
+}
 
 class WatcherSearchPage extends ConsumerStatefulWidget {
   const WatcherSearchPage({Key? key}) : super(key: key);
@@ -17,6 +25,20 @@ class _WatcherSearchPageState extends ConsumerState<WatcherSearchPage> {
   final _searchController = TextEditingController();
   List<User> _searchResults = [];
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(energyProvider.notifier).getWatchers();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _handleSearch(String query) async {
     if (query.isEmpty) {
@@ -55,8 +77,25 @@ class _WatcherSearchPageState extends ConsumerState<WatcherSearchPage> {
     }
   }
 
+  UserRelationStatus _getUserStatus(User user, EnergyState energyState) {
+    final watchersIds = energyState.watchers?.map((w) => w.user_id).toSet() ?? {};
+    final myWatchersIds = energyState.myWatchers?.map((w) => w.id).toSet() ?? {};
+    final pendingSentIds = energyState.pendingRequests?.map((r) => r.targetId).toSet() ?? {};
+
+    if (watchersIds.contains(user.id)) {
+      return UserRelationStatus.watching;
+    } else if (myWatchersIds.contains(user.id)) {
+      return UserRelationStatus.watchingMe;
+    } else if (pendingSentIds.contains(user.id)) {
+      return UserRelationStatus.pending;
+    }
+    return UserRelationStatus.none;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final energyState = ref.watch(energyProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFFf8fafa),
       appBar: AppBar(
@@ -100,7 +139,7 @@ class _WatcherSearchPageState extends ConsumerState<WatcherSearchPage> {
                         itemCount: _searchResults.length,
                         itemBuilder: (context, index) {
                           final user = _searchResults[index];
-                          return _buildUserItem(user);
+                          return _buildUserItem(user, energyState);
                         },
                       ),
           ),
@@ -109,7 +148,9 @@ class _WatcherSearchPageState extends ConsumerState<WatcherSearchPage> {
     );
   }
 
-  Widget _buildUserItem(User user) {
+  Widget _buildUserItem(User user, EnergyState energyState) {
+    final status = _getUserStatus(user, energyState);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -126,10 +167,28 @@ class _WatcherSearchPageState extends ConsumerState<WatcherSearchPage> {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: const Color(0xFFd9e5e6),
-            child: Text(user.username[0].toUpperCase()),
+          Stack(
+            children: [
+              WatcherAvatar(
+                name: user.username,
+                size: 48,
+                showGradientBorder: false,
+              ),
+              if (status != UserRelationStatus.none)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _getStatusColor(status),
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -145,20 +204,130 @@ class _WatcherSearchPageState extends ConsumerState<WatcherSearchPage> {
                     user.fullName!,
                     style: const TextStyle(color: Color(0xFF566162), fontSize: 13),
                   ),
+                const SizedBox(height: 4),
+                _buildStatusBadge(status),
               ],
             ),
           ),
-          ElevatedButton(
-            onPressed: () => _sendInvitation(user),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2a3435),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(tr('invite')),
-          ),
+          _buildActionButton(user, status),
         ],
       ),
     );
+  }
+
+  Widget _buildStatusBadge(UserRelationStatus status) {
+    if (status == UserRelationStatus.none) {
+      return const SizedBox.shrink();
+    }
+
+    String text;
+    Color bgColor;
+    Color textColor;
+
+    switch (status) {
+      case UserRelationStatus.watching:
+        text = tr('watching');
+        bgColor = const Color(0xFF006f1d).withOpacity(0.1);
+        textColor = const Color(0xFF006f1d);
+        break;
+      case UserRelationStatus.watchingMe:
+        text = tr('watching_me');
+        bgColor = const Color(0xFF535f6f).withOpacity(0.1);
+        textColor = const Color(0xFF535f6f);
+        break;
+      case UserRelationStatus.pending:
+        text = tr('pending');
+        bgColor = const Color(0xFFfec330).withOpacity(0.1);
+        textColor = const Color(0xFFfec330);
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(User user, UserRelationStatus status) {
+    switch (status) {
+      case UserRelationStatus.watching:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF006f1d).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            tr('mutual_watch'),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF006f1d),
+            ),
+          ),
+        );
+      case UserRelationStatus.watchingMe:
+        return ElevatedButton(
+          onPressed: () => _sendInvitation(user),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2a3435),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: Text(tr('watch_back')),
+        );
+      case UserRelationStatus.pending:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFfec330).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            tr('waiting'),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFfec330),
+            ),
+          ),
+        );
+      default:
+        return ElevatedButton(
+          onPressed: () => _sendInvitation(user),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2a3435),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: Text(tr('invite')),
+        );
+    }
+  }
+
+  Color _getStatusColor(UserRelationStatus status) {
+    switch (status) {
+      case UserRelationStatus.watching:
+        return const Color(0xFF006f1d);
+      case UserRelationStatus.watchingMe:
+        return const Color(0xFF535f6f);
+      case UserRelationStatus.pending:
+        return const Color(0xFFfec330);
+      default:
+        return Colors.transparent;
+    }
   }
 }

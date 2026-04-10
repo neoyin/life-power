@@ -14,6 +14,7 @@ class EnergyState {
   final EnergyHistory? history;
   final List<WatcherInfo>? watchers;
   final List<User>? myWatchers;
+  final List<WatcherRelation>? pendingRequests;
   final List<CareMessage>? careMessages;
   final int remainingCharges;
   final bool isLoading;
@@ -24,6 +25,7 @@ class EnergyState {
     this.history,
     this.watchers,
     this.myWatchers,
+    this.pendingRequests,
     this.careMessages,
     this.remainingCharges = 3,
     this.isLoading = false,
@@ -35,6 +37,7 @@ class EnergyState {
     EnergyHistory? history,
     List<WatcherInfo>? watchers,
     List<User>? myWatchers,
+    List<WatcherRelation>? pendingRequests,
     List<CareMessage>? careMessages,
     int? remainingCharges,
     bool? isLoading,
@@ -45,6 +48,7 @@ class EnergyState {
       history: history ?? this.history,
       watchers: watchers ?? this.watchers,
       myWatchers: myWatchers ?? this.myWatchers,
+      pendingRequests: pendingRequests ?? this.pendingRequests,
       careMessages: careMessages ?? this.careMessages,
       remainingCharges: remainingCharges ?? this.remainingCharges,
       isLoading: isLoading ?? this.isLoading,
@@ -110,11 +114,23 @@ class EnergyNotifier extends StateNotifier<EnergyState> {
     try {
       final watchers = await _apiService.getWatching();
       final myWatchers = await _apiService.getMyWatchers();
+      final pendingRequests = await _apiService.getPendingRequests();
       state = state.copyWith(
         watchers: watchers,
         myWatchers: myWatchers,
+        pendingRequests: pendingRequests,
         isLoading: false,
       );
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> respondToRequest(int relationId, String status) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _apiService.respondToWatcherRequest(relationId, status);
+      await getWatchers();
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }

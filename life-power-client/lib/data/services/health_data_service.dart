@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:life_power_client/core/logger.dart';
 import 'dart:async';
 
 final healthDataServiceProvider = Provider<HealthDataService>((ref) {
@@ -19,11 +20,12 @@ class HealthDataService {
     if (kIsWeb) return false;
 
     final status = await Permission.activityRecognition.request();
-    await Permission.sensors.request(); 
-    
+    await Permission.sensors.request();
+
     if (status.isGranted) {
       _isTrackingStarted = true;
-      final hasUsageStats = await _channel.invokeMethod<bool>('hasUsageStatsPermission');
+      final hasUsageStats =
+          await _channel.invokeMethod<bool>('hasUsageStatsPermission');
       if (hasUsageStats == false) {
         await _channel.invokeMethod('openUsageStatsSettings');
       }
@@ -40,7 +42,8 @@ class HealthDataService {
 
   Future<void> updateLastWaterTime() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_lastWaterTimeKey, DateTime.now().millisecondsSinceEpoch);
+    await prefs.setInt(
+        _lastWaterTimeKey, DateTime.now().millisecondsSinceEpoch);
   }
 
   Future<DateTime?> getLastMoodTime() async {
@@ -58,14 +61,16 @@ class HealthDataService {
   Future<bool> hasPermission() async {
     if (kIsWeb) return false;
     final activityOk = await Permission.activityRecognition.isGranted;
-    final usageOk = await _channel.invokeMethod<bool>('hasUsageStatsPermission');
+    final usageOk =
+        await _channel.invokeMethod<bool>('hasUsageStatsPermission');
     return activityOk && (usageOk ?? false);
   }
 
   Future<HealthSyncData?> syncHealthData() async {
     if (kIsWeb) return null;
 
-    final hasActivityPermission = await Permission.activityRecognition.isGranted;
+    final hasActivityPermission =
+        await Permission.activityRecognition.isGranted;
     if (!hasActivityPermission) return null;
 
     try {
@@ -77,8 +82,9 @@ class HealthDataService {
       }
 
       double? sleepHours;
-      final hasUsagePermission = await _channel.invokeMethod<bool>('hasUsageStatsPermission');
-      
+      final hasUsagePermission =
+          await _channel.invokeMethod<bool>('hasUsageStatsPermission');
+
       if (hasUsagePermission == true) {
         sleepHours = await _channel.invokeMethod<double>('getSleepDuration');
         if (sleepHours == 0.0) {
@@ -97,19 +103,22 @@ class HealthDataService {
         date: DateTime.now(),
         isSimulatedSleep: hasUsagePermission != true || sleepHours == null,
       );
-      
+
+      AppLogger.i('HealthDataService',
+          'Sync data - steps: ${data.steps}, sleepHours: ${data.sleepHours}, activeMinutes: ${data.activeMinutes}, isSimulatedSleep: ${data.isSimulatedSleep}');
+
       return data;
     } catch (e) {
-      print('HealthDataService: Error getting health data: $e');
+      AppLogger.e('HealthDataService', 'Error getting health data', e);
       return null;
     }
   }
 
   int _getActiveMinutes(int steps) {
     if (steps <= 0) return 0;
-    return (steps / 65).round(); 
+    return (steps / 65).round();
   }
-  
+
   double _getSimulatedSleepHours() {
     final now = DateTime.now();
     final daySeed = now.year * 10000 + now.month * 100 + now.day;

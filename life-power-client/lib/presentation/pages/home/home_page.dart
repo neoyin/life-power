@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_power_client/core/theme.dart';
 import 'package:life_power_client/core/i18n.dart';
 import 'package:life_power_client/core/constants.dart';
+import 'package:life_power_client/core/logger.dart';
 import 'package:life_power_client/data/services/health_data_service.dart';
 import 'package:life_power_client/data/services/api_service.dart' as api;
 import 'package:life_power_client/data/models/energy.dart';
@@ -22,7 +23,8 @@ class HomePage extends ConsumerStatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends ConsumerState<HomePage>
+    with SingleTickerProviderStateMixin {
   int _todaySteps = 0;
   double _sleepHours = 0.0;
   int _waterIntake = 0;
@@ -34,7 +36,7 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   bool _showDebugLog = false;
   List<String> _logMessages = [];
   Timer? _reminderTimer;
-  
+
   late AnimationController _waterAnimController;
 
   final Map<String, int> _feelings = {
@@ -46,8 +48,11 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   };
 
   void _addLog(String message) {
+    // 同时输出到 AppLogger 和本地日志列表
+    AppLogger.i('HomePage', message);
     setState(() {
-      _logMessages.add('[${DateTime.now().toString().substring(11, 19)}] $message');
+      _logMessages
+          .add('[${DateTime.now().toString().substring(11, 19)}] $message');
       if (_logMessages.length > 50) _logMessages.removeAt(0);
     });
   }
@@ -59,7 +64,7 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await ref.read(authProvider.notifier).checkAuthStatus();
       final authState = ref.read(authProvider);
@@ -86,8 +91,10 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   }
 
   Future<void> _checkReminders() async {
-    final lastWater = await ref.read(healthDataServiceProvider).getLastWaterTime();
-    final lastMood = await ref.read(healthDataServiceProvider).getLastMoodTime();
+    final lastWater =
+        await ref.read(healthDataServiceProvider).getLastWaterTime();
+    final lastMood =
+        await ref.read(healthDataServiceProvider).getLastMoodTime();
     if (mounted) {
       setState(() {
         _lastWaterTime = lastWater;
@@ -105,39 +112,45 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
 
   bool _shouldShowMoodReminder() {
     final now = DateTime.now();
-    
+
     final morningStart = DateTime(now.year, now.month, now.day, 7, 30);
     final morningEnd = DateTime(now.year, now.month, now.day, 10, 30);
-    
+
     final eveningStart = DateTime(now.year, now.month, now.day, 18, 0);
     final eveningEnd = DateTime(now.year, now.month, now.day, 21, 0);
-    
+
     bool isMorning = now.isAfter(morningStart) && now.isBefore(morningEnd);
     bool isEvening = now.isAfter(eveningStart) && now.isBefore(eveningEnd);
-    
+
     if (!isMorning && !isEvening) return false;
 
     if (_lastMoodTime == null) return true;
-    
+
     final lastTime = _lastMoodTime!;
-    if (lastTime.year == now.year && lastTime.month == now.month && lastTime.day == now.day) {
-      if (isMorning && lastTime.isAfter(morningStart) && lastTime.isBefore(morningEnd)) return false;
-      if (isEvening && lastTime.isAfter(eveningStart) && lastTime.isBefore(eveningEnd)) return false;
+    if (lastTime.year == now.year &&
+        lastTime.month == now.month &&
+        lastTime.day == now.day) {
+      if (isMorning &&
+          lastTime.isAfter(morningStart) &&
+          lastTime.isBefore(morningEnd)) return false;
+      if (isEvening &&
+          lastTime.isAfter(eveningStart) &&
+          lastTime.isBefore(eveningEnd)) return false;
     }
-    
+
     return true;
   }
 
   Future<void> _loadHealthData() async {
     final healthService = ref.read(healthDataServiceProvider);
     final apiService = ref.read(api.apiServiceProvider);
-    
+
     await healthService.requestPermissions();
     final healthData = await healthService.syncHealthData();
-    
+
     // Fetch current day's signal from server to restore water/mood
     final dailySignal = await apiService.getDailySignal();
-    
+
     if (mounted) {
       setState(() {
         if (healthData != null) {
@@ -164,8 +177,11 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
 
       await healthService.requestPermissions();
       final healthData = await healthService.syncHealthData();
-      
+
       if (mounted && healthData != null) {
+        _addLog(
+            'HomePage: Syncing data - steps: ${healthData.steps}, sleepHours: ${healthData.sleepHours}, activeMinutes: ${healthData.activeMinutes}, waterIntake: $_waterIntake, moodScore: $_moodScore');
+
         await apiService.createSignal(
           SignalFeatureCreate(
             date: healthData.date,
@@ -177,14 +193,16 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
           ),
         );
         await ref.read(energyProvider.notifier).getCurrentEnergy();
-        
+
         setState(() {
           _todaySteps = healthData.steps;
           _sleepHours = healthData.sleepHours ?? 0.0;
           _isSyncing = false;
         });
-        _addLog('HomePage: Sync completed successfully');
+        _addLog(
+            'HomePage: Sync completed successfully - steps: ${healthData.steps}, sleepHours: ${healthData.sleepHours}');
       } else {
+        _addLog('HomePage: No health data to sync');
         setState(() => _isSyncing = false);
       }
     } catch (e) {
@@ -207,7 +225,6 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
           energyState.isLoading || energyState.currentEnergy == null
               ? const Center(child: CircularProgressIndicator())
               : _buildEnergyContent(context, energyState),
-          
           Positioned(
             bottom: 20,
             right: 20,
@@ -233,7 +250,6 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
               ],
             ),
           ),
-          
           _buildWaterFillingOverlay(),
           if (_showDebugLog) _buildDebugOverlay(context),
         ],
@@ -242,12 +258,11 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildFloatingReminder({
-    required String label, 
-    required IconData icon, 
-    required Color color, 
-    required VoidCallback onTap
-  }) {
+  Widget _buildFloatingReminder(
+      {required String label,
+      required IconData icon,
+      required Color color,
+      required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -282,7 +297,8 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, authState, energyState) {
+  PreferredSizeWidget _buildAppBar(
+      BuildContext context, authState, energyState) {
     return AppBar(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -290,11 +306,17 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
         children: [
           Icon(Icons.bubble_chart, color: const Color(0xFF535f6f)),
           const SizedBox(width: 8),
-          Text(tr('app_name'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF2a3435))),
+          Text(tr('app_name'),
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF2a3435))),
         ],
       ),
       actions: [
-        IconButton(icon: const Icon(Icons.bug_report, color: Color(0xFF727d7e)), onPressed: () => setState(() => _showDebugLog = !_showDebugLog)),
+        IconButton(
+            icon: const Icon(Icons.bug_report, color: Color(0xFF727d7e)),
+            onPressed: () => setState(() => _showDebugLog = !_showDebugLog)),
         _buildCareIcon(energyState),
         _buildUserAvatar(authState),
         const SizedBox(width: 16),
@@ -305,15 +327,31 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   Widget _buildCareIcon(EnergyState energyState) {
     return Stack(
       children: [
-        IconButton(icon: const Icon(Icons.favorite_outline, color: Color(0xFF727d7e)), onPressed: () => Navigator.pushNamed(context, '/care')),
+        IconButton(
+            icon: const Icon(Icons.favorite_outline, color: Color(0xFF727d7e)),
+            onPressed: () => Navigator.pushNamed(context, '/care')),
         if ((energyState.careMessages ?? []).isNotEmpty)
-          Positioned(right: 12, top: 12, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFfe8983), shape: BoxShape.circle))),
+          Positioned(
+              right: 12,
+              top: 12,
+              child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                      color: Color(0xFFfe8983), shape: BoxShape.circle))),
       ],
     );
   }
 
   Widget _buildUserAvatar(authState) {
-    return CircleAvatar(radius: 16, backgroundColor: const Color(0xFFd9e5e6), child: Text(authState.user?.username[0].toUpperCase() ?? '?', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF535f6f))));
+    return CircleAvatar(
+        radius: 16,
+        backgroundColor: const Color(0xFFd9e5e6),
+        child: Text(authState.user?.username[0].toUpperCase() ?? '?',
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF535f6f))));
   }
 
   Widget _buildEnergyContent(BuildContext context, EnergyState energyState) {
@@ -359,17 +397,34 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text('${energy.score}', style: const TextStyle(fontSize: 88, fontWeight: FontWeight.w800, color: Color(0xFF2a3435), height: 1)),
-                  const Text('%', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF475363))),
-                ],
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text('${energy.score}',
+                        style: const TextStyle(
+                            fontSize: 88,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF2a3435),
+                            height: 1)),
+                    const Text('%',
+                        style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF475363))),
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
-              Text(tr('current_energy').toUpperCase(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF566162), letterSpacing: 1)),
+              Text(tr('current_energy').toUpperCase(),
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF566162),
+                      letterSpacing: 1)),
             ],
           ),
         ],
@@ -378,31 +433,71 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   }
 
   Widget _buildWatcherSection(BuildContext context, EnergyState energyState) {
+    final myWatchers = energyState.myWatchers ?? [];
     return Column(
       children: [
         WatcherAvatarList(
-          watchers: (energyState.myWatchers ?? []).isEmpty 
-            ? [WatcherAvatarData(name: 'Demo 1'), WatcherAvatarData(name: 'Demo 2')]
-            : energyState.myWatchers!.map((w) => WatcherAvatarData(name: w.username, imageUrl: w.avatarUrl)).toList(),
+          watchers: myWatchers.isEmpty
+              ? [
+                  WatcherAvatarData(name: 'Demo 1'),
+                  WatcherAvatarData(name: 'Demo 2')
+                ]
+              : myWatchers
+                  .map((w) => WatcherAvatarData(
+                      name: w.username, imageUrl: w.avatarUrl))
+                  .toList(),
           maxDisplay: 4,
           avatarSize: 40,
+          onAvatarTap: myWatchers.isEmpty
+              ? null
+              : (index) {
+                  if (index < myWatchers.length) {
+                    _navigateToWatcherDetail(context, myWatchers[index]);
+                  }
+                },
         ),
         const SizedBox(height: 16),
-        Text('${energyState.currentEnergy?.watcherCount ?? 0} ${tr('people_watching_you')}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF566162))),
+        Text(
+            '${energyState.currentEnergy?.watcherCount ?? 0} ${tr('people_watching_you')}',
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF566162))),
       ],
+    );
+  }
+
+  void _navigateToWatcherDetail(BuildContext context, dynamic user) {
+    Navigator.pushNamed(
+      context,
+      '/watcher_detail',
+      arguments: {
+        'userId': user.id,
+      },
     );
   }
 
   Widget _buildInsightBentoGrid(BuildContext context, EnergyCurrent energy) {
     return Column(
       children: [
-        GestureDetector(onTap: () => _syncHealthData(), child: _buildMainInsightCard()),
+        GestureDetector(
+            onTap: () => _syncHealthData(), child: _buildMainInsightCard()),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildInsightCard(icon: Icons.monitor_heart, iconColor: const Color(0xFFff4d6d), title: tr('pulse_stability'), value: '${(energy.confidence * 100).round()}%')),
+            Expanded(
+                child: _buildInsightCard(
+                    icon: Icons.monitor_heart,
+                    iconColor: const Color(0xFFff4d6d),
+                    title: tr('pulse_stability'),
+                    value: '${(energy.confidence * 100).round()}%')),
             const SizedBox(width: 16),
-            Expanded(child: _buildInsightCard(icon: Icons.auto_awesome, iconColor: const Color(0xFFff4d6d), title: tr('aura_sync'), value: _getAuraSyncStatus(energy.level))),
+            Expanded(
+                child: _buildInsightCard(
+                    icon: Icons.auto_awesome,
+                    iconColor: const Color(0xFFff4d6d),
+                    title: tr('aura_sync'),
+                    value: _getAuraSyncStatus(energy.level))),
           ],
         ),
         const SizedBox(height: 16),
@@ -429,7 +524,15 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: const Color(0xFF2a3435).withOpacity(0.06), blurRadius: 40, offset: const Offset(0, 20))]),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+                color: const Color(0xFF2a3435).withOpacity(0.06),
+                blurRadius: 40,
+                offset: const Offset(0, 20))
+          ]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -437,30 +540,62 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Icon(Icons.favorite, color: Color(0xFFff4d6d), size: 28),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFff4d6d).withOpacity(0.1), borderRadius: BorderRadius.circular(20)), child: Text(tr('synchronized'), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFff4d6d), letterSpacing: 1))),
+              Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFff4d6d).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Text(tr('synchronized'),
+                      style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFff4d6d),
+                          letterSpacing: 1))),
             ],
           ),
           const SizedBox(height: 16),
-          Text(tr('heart_mind_harmony'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2a3435))),
+          Text(tr('heart_mind_harmony'),
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2a3435))),
           const SizedBox(height: 8),
-          Text(tr('heart_mind_harmony_desc'), style: const TextStyle(fontSize: 14, color: Color(0xFF566162), height: 1.5)),
+          Text(tr('heart_mind_harmony_desc'),
+              style: const TextStyle(
+                  fontSize: 14, color: Color(0xFF566162), height: 1.5)),
         ],
       ),
     );
   }
 
-  Widget _buildInsightCard({required IconData icon, required Color iconColor, required String title, required String value}) {
+  Widget _buildInsightCard(
+      {required IconData icon,
+      required Color iconColor,
+      required String title,
+      required String value}) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFFf0f4f5), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+          color: const Color(0xFFf0f4f5),
+          borderRadius: BorderRadius.circular(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: iconColor, size: 24),
           const SizedBox(height: 12),
-          Text(title.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF566162), letterSpacing: 1)),
+          Text(title.toUpperCase(),
+              style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF566162),
+                  letterSpacing: 1)),
           const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2a3435))),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2a3435))),
         ],
       ),
     );
@@ -469,17 +604,28 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   Widget _buildStepsCard() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFFf0f4f5), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+          color: const Color(0xFFf0f4f5),
+          borderRadius: BorderRadius.circular(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.directions_walk, color: Color(0xFF006f1d), size: 24),
           const SizedBox(height: 12),
-          Text(tr('peak_flow').toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF566162))),
+          Text(tr('peak_flow').toUpperCase(),
+              style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF566162))),
           const SizedBox(height: 8),
-          Text('$_todaySteps', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2a3435))),
+          Text('$_todaySteps',
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2a3435))),
           const SizedBox(height: 4),
-          Text('/ ${Constants.targetSteps} ${tr('steps')}', style: const TextStyle(fontSize: 12, color: Color(0xFF566162))),
+          Text('/ ${Constants.targetSteps} ${tr('steps')}',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF566162))),
         ],
       ),
     );
@@ -488,15 +634,25 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   Widget _buildSleepCard() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFFf0f4f5), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+          color: const Color(0xFFf0f4f5),
+          borderRadius: BorderRadius.circular(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.bedtime, color: Color(0xFFfec330), size: 24),
           const SizedBox(height: 12),
-          Text(tr('rest_quality').toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF566162))),
+          Text(tr('rest_quality').toUpperCase(),
+              style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF566162))),
           const SizedBox(height: 8),
-          Text('${_sleepHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2a3435))),
+          Text('${_sleepHours.toStringAsFixed(1)}h',
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2a3435))),
           const SizedBox(height: 20),
         ],
       ),
@@ -506,17 +662,32 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   Widget _buildWaterCard() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFFf0f4f5), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+          color: const Color(0xFFf0f4f5),
+          borderRadius: BorderRadius.circular(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.water_drop, color: Color(0xFF4ea8de), size: 24),
           const SizedBox(height: 12),
-          Text(tr('water_intake'), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF566162))),
+          Text(tr('water_intake'),
+              style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF566162))),
           const SizedBox(height: 8),
-          Text('$_waterIntake ml', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2a3435))),
+          Text('$_waterIntake ml',
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2a3435))),
           const SizedBox(height: 8),
-          LinearProgressIndicator(value: (_waterIntake / 2000).clamp(0.0, 1.0), backgroundColor: const Color(0xFFd9e5e6), valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF4ea8de)), minHeight: 6),
+          LinearProgressIndicator(
+              value: (_waterIntake / 2000).clamp(0.0, 1.0),
+              backgroundColor: const Color(0xFFd9e5e6),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Color(0xFF4ea8de)),
+              minHeight: 6),
         ],
       ),
     );
@@ -527,17 +698,28 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
       onTap: () => _showMoodStatusSelector(),
       child: Container(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: const Color(0xFFf0f4f5), borderRadius: BorderRadius.circular(24)),
+        decoration: BoxDecoration(
+            color: const Color(0xFFf0f4f5),
+            borderRadius: BorderRadius.circular(24)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Icon(Icons.blur_on, color: Color(0xFF9d4edd), size: 24),
             const SizedBox(height: 12),
-            Text(tr('mental_state'), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF566162))),
+            Text(tr('mental_state'),
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF566162))),
             const SizedBox(height: 8),
-            Text(_getCurrentMoodText(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2a3435))),
+            Text(_getCurrentMoodText(),
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2a3435))),
             const SizedBox(height: 8),
-            Text(tr('tap_to_change_feel'), style: const TextStyle(fontSize: 9, color: Color(0xFF727d7e))),
+            Text(tr('tap_to_change_feel'),
+                style: const TextStyle(fontSize: 9, color: Color(0xFF727d7e))),
           ],
         ),
       ),
@@ -546,33 +728,48 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
 
   String _getCurrentMoodText() {
     if (_moodScore == 0) return tr('not_set');
-    return tr(_feelings.entries.firstWhere((e) => e.value == _moodScore, orElse: () => _feelings.entries.first).key);
+    return tr(_feelings.entries
+        .firstWhere((e) => e.value == _moodScore,
+            orElse: () => _feelings.entries.first)
+        .key);
   }
 
   void _showMoodStatusSelector() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       builder: (context) {
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(tr('current_mood_prompt'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(tr('current_mood_prompt'),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 24),
-              ..._feelings.entries.map((e) => ListTile(
-                title: Text(tr(e.key), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                trailing: _moodScore == e.value ? const Icon(Icons.check_circle, color: Color(0xFF9d4edd)) : null,
-                onTap: () async {
-                  Navigator.pop(context);
-                  setState(() => _moodScore = e.value);
-                  await ref.read(healthDataServiceProvider).updateLastMoodTime();
-                  await _checkReminders();
-                  _syncManualData(_waterIntake, e.value);
-                },
-              )).toList(),
+              ..._feelings.entries
+                  .map((e) => ListTile(
+                        title: Text(tr(e.key),
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w500)),
+                        trailing: _moodScore == e.value
+                            ? const Icon(Icons.check_circle,
+                                color: Color(0xFF9d4edd))
+                            : null,
+                        onTap: () async {
+                          Navigator.pop(context);
+                          setState(() => _moodScore = e.value);
+                          await ref
+                              .read(healthDataServiceProvider)
+                              .updateLastMoodTime();
+                          await _checkReminders();
+                          _syncManualData(_waterIntake, e.value);
+                        },
+                      ))
+                  .toList(),
               const SizedBox(height: 16),
             ],
           ),
@@ -586,7 +783,19 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
       animation: _waterAnimController,
       builder: (context, child) {
         if (!_waterAnimController.isAnimating) return const SizedBox.shrink();
-        return Positioned.fill(child: Center(child: Opacity(opacity: 1.0 - _waterAnimController.value, child: Container(width: 100 + 200 * _waterAnimController.value, height: 100 + 200 * _waterAnimController.value, decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF4ea8de).withOpacity(0.3)), child: const Center(child: Icon(Icons.water_drop, size: 80, color: Color(0xFF4ea8de)))))));
+        return Positioned.fill(
+            child: Center(
+                child: Opacity(
+                    opacity: 1.0 - _waterAnimController.value,
+                    child: Container(
+                        width: 100 + 200 * _waterAnimController.value,
+                        height: 100 + 200 * _waterAnimController.value,
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF4ea8de).withOpacity(0.3)),
+                        child: const Center(
+                            child: Icon(Icons.water_drop,
+                                size: 80, color: Color(0xFF4ea8de)))))));
       },
     );
   }
@@ -605,15 +814,18 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
       // If data isn't loaded yet, try to load it first to avoid overwriting with defaults
       await _loadHealthData();
     }
-    
+
     final healthService = ref.read(healthDataServiceProvider);
     final apiService = ref.read(api.apiServiceProvider);
-    
+
     final healthData = await healthService.syncHealthData();
     if (healthData != null) {
       // Re-fetch latest from server to be absolutely sure we have the latest other fields
       final latestSignal = await apiService.getDailySignal();
-      
+
+      _addLog(
+          'HomePage: Manual sync data - steps: ${healthData.steps}, sleepHours: ${healthData.sleepHours}, activeMinutes: ${healthData.activeMinutes}, waterIntake: $water, moodScore: $mood');
+
       await apiService.createSignal(
         SignalFeatureCreate(
           date: healthData.date,
@@ -627,6 +839,10 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
         ),
       );
       await ref.read(energyProvider.notifier).getCurrentEnergy();
+
+      _addLog('HomePage: Manual sync completed successfully');
+    } else {
+      _addLog('HomePage: No health data for manual sync');
     }
   }
 
@@ -634,23 +850,70 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(tr('energy_history').toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF566162), letterSpacing: 1)),
+        Text(tr('energy_history').toUpperCase(),
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF566162),
+                letterSpacing: 1)),
         const SizedBox(height: 16),
         Container(
           height: 200,
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 10))]),
-          child: EnergyChart(history: energyState.history ?? EnergyHistory(snapshots: [])),
+          decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10))
+              ]),
+          child: EnergyChart(
+              history: energyState.history ?? EnergyHistory(snapshots: [])),
         ),
       ],
     );
   }
 
   Widget _buildChargeButton(BuildContext context) {
-    return SizedBox(width: double.infinity, height: 60, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2a3435), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), onPressed: () => Navigator.pushNamed(context, '/charge'), child: Text(tr('charge_now'), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))));
+    return SizedBox(
+        width: double.infinity,
+        height: 60,
+        child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2a3435),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16))),
+            onPressed: () => Navigator.pushNamed(context, '/charge'),
+            child: Text(tr('charge_now'),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold))));
   }
 
   Widget _buildDebugOverlay(BuildContext context) {
-    return Positioned.fill(child: Container(color: Colors.black.withOpacity(0.7), child: Column(children: [Container(color: Colors.grey[800], child: ListTile(title: const Text('Debug Log', style: TextStyle(color: Colors.white)), trailing: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => setState(() => _showDebugLog = false)))), Expanded(child: ListView.builder(itemCount: _logMessages.length, itemBuilder: (context, i) => ListTile(title: Text(_logMessages[i], style: const TextStyle(color: Colors.white, fontSize: 12)))))])));
+    return Positioned.fill(
+        child: Container(
+            color: Colors.black.withOpacity(0.7),
+            child: Column(children: [
+              Container(
+                  color: Colors.grey[800],
+                  child: ListTile(
+                      title: const Text('Debug Log',
+                          style: TextStyle(color: Colors.white)),
+                      trailing: IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () =>
+                              setState(() => _showDebugLog = false)))),
+              Expanded(
+                  child: ListView.builder(
+                      itemCount: _logMessages.length,
+                      itemBuilder: (context, i) => ListTile(
+                          title: Text(_logMessages[i],
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 12)))))
+            ])));
   }
 
   String _getAuraSyncStatus(String level) {
@@ -660,6 +923,16 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   }
 
   Widget _buildWelcomePage(BuildContext context) {
-    return Scaffold(body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.bolt, size: 80), Text(tr('app_name'), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)), ElevatedButton(onPressed: () => Navigator.pushNamed(context, '/login'), child: Text(tr('login')))])));
+    return Scaffold(
+        body: Center(
+            child:
+                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      const Icon(Icons.bolt, size: 80),
+      Text(tr('app_name'),
+          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+      ElevatedButton(
+          onPressed: () => Navigator.pushNamed(context, '/login'),
+          child: Text(tr('login')))
+    ])));
   }
 }

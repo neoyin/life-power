@@ -6,6 +6,7 @@ import 'package:life_power_client/data/models/user.dart';
 import 'package:life_power_client/data/models/user_settings.dart';
 import 'package:life_power_client/data/models/energy.dart';
 import 'package:life_power_client/data/models/watcher.dart';
+import 'package:life_power_client/data/models/user_detail.dart';
 import 'package:life_power_client/data/models/charge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -104,23 +105,43 @@ class ApiService {
   }
 
   Future<User> register(UserRegister user) async {
-    final response = await _dio.post(
-      Constants.authRegister,
-      data: user.toJson(),
-    );
-    return User.fromJson(response.data);
+    try {
+      final response = await _dio.post(
+        Constants.authRegister,
+        data: user.toJson(),
+      );
+      return User.fromJson(response.data);
+    } catch (e) {
+      if (e is DioException && e.response != null) {
+        final errorData = e.response?.data;
+        if (errorData is Map && errorData.containsKey('detail')) {
+          throw errorData['detail'];
+        }
+      }
+      throw e;
+    }
   }
 
   Future<User> login(UserAuth auth) async {
-    final response = await _dio.post(
-      Constants.authLogin,
-      data: auth.toJson(),
-    );
-    final token = response.data['access_token'];
-    final refreshToken = response.data['refresh_token'];
-    await _saveToken(token);
-    await _saveRefreshToken(refreshToken);
-    return User.fromJson(response.data);
+    try {
+      final response = await _dio.post(
+        Constants.authLogin,
+        data: auth.toJson(),
+      );
+      final token = response.data['access_token'];
+      final refreshToken = response.data['refresh_token'];
+      await _saveToken(token);
+      await _saveRefreshToken(refreshToken);
+      return User.fromJson(response.data);
+    } catch (e) {
+      if (e is DioException && e.response != null) {
+        final errorData = e.response?.data;
+        if (errorData is Map && errorData.containsKey('detail')) {
+          throw errorData['detail'];
+        }
+      }
+      throw e;
+    }
   }
 
   Future<User> updateProfile({String? fullName, String? avatarUrl}) async {
@@ -161,8 +182,10 @@ class ApiService {
     final response = await _dio.put(
       Constants.authSettings,
       data: {
-        if (lowEnergyThreshold != null) 'low_energy_threshold': lowEnergyThreshold,
-        if (enableNotifications != null) 'enable_notifications': enableNotifications,
+        if (lowEnergyThreshold != null)
+          'low_energy_threshold': lowEnergyThreshold,
+        if (enableNotifications != null)
+          'enable_notifications': enableNotifications,
         if (shareEnergyData != null) 'share_energy_data': shareEnergyData,
       },
     );
@@ -183,6 +206,14 @@ class ApiService {
     return EnergyHistory.fromJson(response.data);
   }
 
+  Future<EnergyHistory> getUserEnergyHistory(int userId, {int days = 7}) async {
+    final response = await _dio.get(
+      Constants.energyUserHistory,
+      queryParameters: {'days': days, 'user_id': userId},
+    );
+    return EnergyHistory.fromJson(response.data);
+  }
+
   Future<SignalFeature> createSignal(SignalFeatureCreate signal) async {
     final response = await _dio.post(
       Constants.energySignal,
@@ -194,7 +225,8 @@ class ApiService {
   Future<SignalFeature?> getDailySignal() async {
     try {
       final dateStr = DateTime.now().toIso8601String();
-      final response = await _dio.get(Constants.energySignal, queryParameters: {'date': dateStr});
+      final response = await _dio
+          .get(Constants.energySignal, queryParameters: {'date': dateStr});
       return SignalFeature.fromJson(response.data);
     } catch (e) {
       return null;
@@ -235,6 +267,11 @@ class ApiService {
     final response = await _dio.get(Constants.watcherPending);
     var list = response.data as List;
     return list.map((i) => WatcherRelation.fromJson(i)).toList();
+  }
+
+  Future<UserDetail> getUserDetail(int userId) async {
+    final response = await _dio.get('/watchers/user/$userId');
+    return UserDetail.fromJson(response.data);
   }
 
   // 关怀消息相关
@@ -279,7 +316,7 @@ class ApiService {
     // 1. Get current signal
     final daily = await getDailySignal();
     final currentSessions = daily?.breathingSessions ?? 0;
-    
+
     // 2. Create signal with incremented count
     return createSignal(
       SignalFeatureCreate(

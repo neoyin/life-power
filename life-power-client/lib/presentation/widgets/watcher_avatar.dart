@@ -23,84 +23,59 @@ class WatcherAvatar extends StatelessWidget {
     if (isAddButton) {
       return GestureDetector(
         onTap: onTap,
-        child: Column(
-          children: [
-            Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFd9e5e6),
-              ),
-              child: Icon(
-                Icons.add,
-                color: const Color(0xFF727d7e),
-                size: size * 0.4,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Add',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF566162),
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFd9e5e6),
+          ),
+          child: Icon(
+            Icons.add,
+            color: const Color(0xFF727d7e),
+            size: size * 0.4,
+          ),
         ),
       );
     }
 
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(2),
-            decoration: showGradientBorder
-                ? BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF535f6f), Color(0xFFd7e3f7)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  )
-                : null,
-            child: Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
+      child: Container(
+        width: showGradientBorder ? size + 4 : size,
+        height: showGradientBorder ? size + 4 : size,
+        padding: const EdgeInsets.all(2),
+        decoration: showGradientBorder
+            ? BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFFf0f4f5),
-              ),
-              child: ClipOval(
-                child: imageUrl != null && imageUrl!.isNotEmpty
-                    ? Image.network(
-                        imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return _buildInitials();
-                        },
-                      )
-                    : _buildInitials(),
-              ),
-            ),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF535f6f), Color(0xFFd7e3f7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              )
+            : null,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFf0f4f5),
           ),
-          const SizedBox(height: 8),
-          Text(
-            name,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF566162),
-              letterSpacing: 0.5,
-            ),
-            overflow: TextOverflow.ellipsis,
+          child: ClipOval(
+            child: imageUrl != null && imageUrl!.isNotEmpty
+                ? Image.network(
+                    imageUrl!,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return _buildInitials();
+                    },
+                  )
+                : _buildInitials(),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -133,6 +108,7 @@ class WatcherAvatarList extends StatelessWidget {
   final double avatarSize;
   final bool showGradientBorder;
   final VoidCallback? onAddTap;
+  final Function(int index)? onAvatarTap;
 
   const WatcherAvatarList({
     super.key,
@@ -141,6 +117,7 @@ class WatcherAvatarList extends StatelessWidget {
     this.avatarSize = 40,
     this.showGradientBorder = true,
     this.onAddTap,
+    this.onAvatarTap,
   });
 
   @override
@@ -162,11 +139,14 @@ class WatcherAvatarList extends StatelessWidget {
                   width: 4,
                 ),
               ),
-              child: WatcherAvatar(
-                name: watchers[i].name,
-                imageUrl: watchers[i].imageUrl,
-                size: avatarSize,
-                showGradientBorder: showGradientBorder,
+              child: GestureDetector(
+                onTap: () => onAvatarTap?.call(i),
+                child: WatcherAvatar(
+                  name: watchers[i].name,
+                  imageUrl: watchers[i].imageUrl,
+                  size: avatarSize,
+                  showGradientBorder: showGradientBorder,
+                ),
               ),
             ),
           ),
