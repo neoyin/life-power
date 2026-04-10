@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
-from app.schemas.user_schema import User, UserCreate, UserAuth, LoginResponse, UserUpdate, UserSettings, UserSettingsUpdate
+from app.schemas.user_schema import User, UserCreate, UserAuth, LoginResponse, UserUpdate, UserSettings, UserSettingsUpdate, RefreshTokenRequest, Token
 from app.services.auth_service import AuthService
 from app.api.deps import get_current_user
 from app.models.user import User as UserModel
@@ -41,6 +41,18 @@ def login(auth_data: UserAuth, db: Session = Depends(get_db)):
         email=user.email,
         full_name=user.full_name,
     )
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
+    token = AuthService.refresh_access_token(db, request.refresh_token)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token
 
 
 @router.get("/me", response_model=User)

@@ -2,7 +2,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.models.user import User, UserAuthIdentity, UserSettings
 from app.schemas.user_schema import UserCreate, UserAuth, Token, UserUpdate, UserSettingsUpdate
-from app.utils.security import verify_password, get_password_hash, create_access_token, create_refresh_token
+from app.utils.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_token
 
 
 class AuthService:
@@ -68,6 +68,29 @@ class AuthService:
         
         return (token, user)
     
+    @staticmethod
+    def refresh_access_token(db: Session, refresh_token: str) -> Optional[Token]:
+        payload = decode_token(refresh_token)
+        if not payload:
+            return None
+            
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+            
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            return None
+            
+        access_token = create_access_token(data={"sub": str(user.id)})
+        new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
+        
+        return Token(
+            access_token=access_token,
+            refresh_token=new_refresh_token,
+            token_type="bearer"
+        )
+
     @staticmethod
     def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
         return db.query(User).filter(User.id == user_id).first()
