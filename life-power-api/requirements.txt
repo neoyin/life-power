@@ -10,3 +10,4 @@ python-multipart
 passlib[bcrypt]
 python-dotenv
 email-validator
+boto3>=1.34.0

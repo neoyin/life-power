@@ -5,7 +5,7 @@ from datetime import datetime
 
 class WatcherRelationBase(BaseModel):
     target_id: int
-    status: str
+    status: Optional[str] = None
 
 
 class WatcherRelationCreate(WatcherRelationBase):
@@ -53,6 +53,7 @@ class WatcherInfo(BaseModel):
     user_id: int
     username: str
     full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
     energy_score: int
     energy_level: str
     status: str

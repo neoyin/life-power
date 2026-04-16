@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.api import auth_router, energy_router, watchers_router, care_router, charge_router
+from app.api import auth_router, energy_router, watchers_router, care_router, charge_router, upload_router
 import os
 
 app = FastAPI(
@@ -24,6 +24,7 @@ app.include_router(energy_router.router)
 app.include_router(watchers_router.router)
 app.include_router(care_router.router)
 app.include_router(charge_router.router)
+app.include_router(upload_router.router)
 
 @app.get("/")
 def read_root():

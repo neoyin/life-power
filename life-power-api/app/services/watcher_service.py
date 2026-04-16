@@ -11,17 +11,32 @@ class WatcherService:
     def create_watcher_relation(db: Session, watcher_id: int, target_id: int) -> WatcherRelation:
         """
         创建守望者关系
+        如果对方已经向我发送了守望请求，则直接创建 accepted 关系形成互守
         """
-        # 检查关系是否已存在
         existing_relation = db.query(WatcherRelation).filter(
             WatcherRelation.watcher_id == watcher_id,
             WatcherRelation.target_id == target_id
         ).first()
-        
+
         if existing_relation:
             return existing_relation
-        
-        # 创建新关系
+
+        reverse_relation = db.query(WatcherRelation).filter(
+            WatcherRelation.watcher_id == target_id,
+            WatcherRelation.target_id == watcher_id
+        ).first()
+
+        if reverse_relation:
+            new_relation = WatcherRelation(
+                watcher_id=watcher_id,
+                target_id=target_id,
+                status="accepted"
+            )
+            db.add(new_relation)
+            db.commit()
+            db.refresh(new_relation)
+            return new_relation
+
         new_relation = WatcherRelation(
             watcher_id=watcher_id,
             target_id=target_id,
@@ -31,7 +46,7 @@ class WatcherService:
         db.commit()
         db.refresh(new_relation)
         return new_relation
-    
+
     @staticmethod
     def update_watcher_relation(db: Session, relation_id: int, update_data: WatcherRelationUpdate) -> Optional[WatcherRelation]:
         """
@@ -40,15 +55,15 @@ class WatcherService:
         relation = db.query(WatcherRelation).filter(
             WatcherRelation.id == relation_id
         ).first()
-        
+
         if not relation:
             return None
-        
+
         relation.status = update_data.status
         db.commit()
         db.refresh(relation)
         return relation
-    
+
     @staticmethod
     def get_watcher_relations_as_watcher(db: Session, user_id: int) -> List[WatcherRelation]:
         """
@@ -58,7 +73,7 @@ class WatcherService:
             WatcherRelation.watcher_id == user_id,
             WatcherRelation.status == "accepted"
         ).all()
-    
+
     @staticmethod
     def get_watcher_relations_as_target(db: Session, user_id: int) -> List[WatcherRelation]:
         """
@@ -68,7 +83,7 @@ class WatcherService:
             WatcherRelation.target_id == user_id,
             WatcherRelation.status == "accepted"
         ).all()
-    
+
     @staticmethod
     def get_pending_relations(db: Session, user_id: int) -> List[WatcherRelation]:
         """
@@ -78,32 +93,30 @@ class WatcherService:
             WatcherRelation.target_id == user_id,
             WatcherRelation.status == "pending"
         ).all()
-    
+
     @staticmethod
     def get_watcher_info(db: Session, user_id: int) -> List[WatcherInfo]:
         """
         获取守望者信息，包括能量带
         """
-        # 获取用户作为守望者的关系
         relations = WatcherService.get_watcher_relations_as_watcher(db, user_id)
-        
+
         watcher_infos = []
         for relation in relations:
-            # 获取目标用户信息
             target = db.query(User).filter(User.id == relation.target_id).first()
             if target:
-                # 获取目标用户的能量状态
                 energy = EnergyEngine.get_current_energy(db, target.id)
                 energy_band = energy.level if energy else "medium"
-                
+
                 watcher_info = WatcherInfo(
                     user_id=target.id,
                     username=target.username,
                     full_name=target.full_name,
+                    avatar_url=target.avatar_url,
                     energy_score=energy.score if energy else 50,
                     energy_level=energy.level if energy else "medium",
                     status=relation.status
                 )
                 watcher_infos.append(watcher_info)
-        
+
         return watcher_infos

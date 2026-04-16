@@ -2,7 +2,7 @@ class Constants {
   // API 端点
   //static const String baseUrl = 'http://localhost:8000';
   //static const String baseUrl = 'https://power-api-production.up.railway.app/';
-  static const String baseUrl = 'http://10.53.238.238:8000/';
+  static const String baseUrl = 'http://10.140.68.238:8000/';
   // API 路径
   static const String authRegister = '/auth/register';
   static const String authLogin = '/auth/login';

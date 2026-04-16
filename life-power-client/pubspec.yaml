@@ -1,6 +1,6 @@
 name: life_power_client
 description: A Flutter app for LifePower - 守望电量
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -22,6 +22,9 @@ dependencies:
   step_logger: ^1.0.0-beta.2
   permission_handler: ^11.0.0
   logger: ^2.0.2
+  image_picker: ^1.0.7
+  path_provider: ^2.1.2
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:

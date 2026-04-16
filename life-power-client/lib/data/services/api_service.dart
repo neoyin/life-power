@@ -1,5 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_power_client/core/constants.dart';
 import 'package:life_power_client/data/models/user.dart';
@@ -8,6 +12,7 @@ import 'package:life_power_client/data/models/energy.dart';
 import 'package:life_power_client/data/models/watcher.dart';
 import 'package:life_power_client/data/models/user_detail.dart';
 import 'package:life_power_client/data/models/charge.dart';
+import 'package:life_power_client/data/models/upload.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final apiServiceProvider = Provider<ApiService>((ref) => ApiService());
@@ -225,10 +230,13 @@ class ApiService {
   Future<SignalFeature?> getDailySignal() async {
     try {
       final dateStr = DateTime.now().toIso8601String();
+      debugPrint('[API] getDailySignal called with date: $dateStr');
       final response = await _dio
           .get(Constants.energySignal, queryParameters: {'date': dateStr});
+      debugPrint('[API] getDailySignal response: ${response.data}');
       return SignalFeature.fromJson(response.data);
     } catch (e) {
+      debugPrint('[API] getDailySignal error: $e');
       return null;
     }
   }
@@ -329,5 +337,80 @@ class ApiService {
   Future<DailyChargeLimit> getDailyChargeLimit() async {
     final response = await _dio.get(Constants.chargeDailyLimit);
     return DailyChargeLimit.fromJson(response.data);
+  }
+
+  Future<PresignedUrlData> getAvatarPresignedUrl({String contentType = 'image/jpeg'}) async {
+    final response = await _dio.post(
+      '/upload/avatar/presigned-url',
+      data: {'content_type': contentType},
+    );
+    return PresignedUrlData.fromJson(response.data);
+  }
+
+  Future<void> uploadToR2({
+    required String presignedUrl,
+    required Map<String, String> fields,
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    String contentType = 'application/octet-stream';
+    if (filename.toLowerCase().endsWith('.png')) {
+      contentType = 'image/png';
+    } else if (filename.toLowerCase().endsWith('.jpg') || filename.toLowerCase().endsWith('.jpeg')) {
+      contentType = 'image/jpeg';
+    } else if (filename.toLowerCase().endsWith('.webp')) {
+      contentType = 'image/webp';
+    }
+
+    final dio = Dio();
+    dio.options.validateStatus = (status) => status != null && status < 500;
+
+    final response = await dio.put(
+      presignedUrl,
+      data: bytes,
+      options: Options(
+        headers: {
+          'Content-Type': contentType,
+        },
+      ),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Upload failed with status: ${response.statusCode}');
+    }
+  }
+
+  Future<User> updateAvatar(String avatarUrl) async {
+    final response = await _dio.put(
+      '/auth/me/avatar',
+      data: {'avatar_url': avatarUrl},
+    );
+    return User.fromJson(response.data);
+  }
+
+  Future<String> uploadAvatarDirect(Uint8List bytes, String filename, String contentType) async {
+    final mimeType = contentType.split('/')[0];
+    final subType = contentType.split('/')[1];
+    final mediaType = MediaType(mimeType, subType);
+
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: mediaType,
+      ),
+    });
+
+    final response = await _dio.post(
+      '/upload/avatar/direct-upload',
+      data: formData,
+      options: Options(
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      ),
+    );
+
+    return response.data['public_url'] as String;
   }
 }

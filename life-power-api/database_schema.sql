@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS care_messages (
     recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     emoji_response VARCHAR(10),
+    energy_boosted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

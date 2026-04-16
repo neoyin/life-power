@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:life_power_client/core/i18n.dart';
 import 'package:life_power_client/presentation/providers/auth_provider.dart';
 import 'package:life_power_client/presentation/providers/locale_provider.dart';
@@ -10,6 +11,7 @@ import 'package:life_power_client/presentation/widgets/watcher_avatar.dart';
 import 'package:life_power_client/presentation/widgets/main_navigation_bar.dart';
 import 'package:life_power_client/presentation/providers/energy_provider.dart';
 import 'package:life_power_client/data/services/health_data_service.dart';
+import 'package:life_power_client/data/services/api_service.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -209,6 +211,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final user = ref.watch(authProvider).user;
     final displayName = user?.fullName ?? user?.username ?? 'User';
     final email = user?.email ?? '';
+    final avatarUrl = user?.avatarUrl;
 
     return GestureDetector(
       onTap: () => _showEditProfileDialog(),
@@ -229,6 +232,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         child: Row(
           children: [
             WatcherAvatar(
+              key: ValueKey(user?.avatarUrl ?? 'default'),
               name: displayName,
               imageUrl: user?.avatarUrl,
               size: 72,
@@ -264,12 +268,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         color: Color(0xFF535f6f),
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        tr('edit_profile'),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF535f6f),
+                      Expanded(
+                        child: Text(
+                          tr('edit_profile'),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF535f6f),
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -293,6 +300,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         TextEditingController(text: user?.fullName ?? user?.username ?? '');
     final emailController = TextEditingController(text: user?.email ?? '');
     bool isLoading = false;
+    bool isUploadingAvatar = false;
+    String? tempAvatarUrl;
 
     showDialog(
       context: context,
@@ -306,17 +315,80 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     GestureDetector(
-                      onTap: () {},
+                      onTap: isUploadingAvatar
+                          ? null
+                          : () async {
+                              final ImagePicker picker = ImagePicker();
+                              final XFile? image = await picker.pickImage(
+                                source: ImageSource.gallery,
+                                maxWidth: 512,
+                                maxHeight: 512,
+                                imageQuality: 85,
+                              );
+
+                              if (image == null) return;
+
+                              setDialogState(() => isUploadingAvatar = true);
+
+                              try {
+                                final apiService = ref.read(apiServiceProvider);
+
+                                final bytes = await image.readAsBytes();
+                                final filename = image.name;
+                                final contentType =
+                                    image.mimeType ?? 'image/jpeg';
+
+                                final publicUrl =
+                                    await apiService.uploadAvatarDirect(
+                                  bytes,
+                                  filename,
+                                  contentType,
+                                );
+
+                                setDialogState(() {
+                                  tempAvatarUrl = publicUrl;
+                                  isUploadingAvatar = false;
+                                });
+                              } catch (e, stackTrace) {
+                                debugPrint('[Avatar Upload] ERROR: $e');
+                                debugPrint(
+                                    '[Avatar Upload] Stack trace: $stackTrace');
+                                setDialogState(() => isUploadingAvatar = false);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text('${tr('error')}: $e')),
+                                  );
+                                }
+                              }
+                            },
                       child: Stack(
                         children: [
                           WatcherAvatar(
+                            key: ValueKey(
+                                tempAvatarUrl ?? user?.avatarUrl ?? 'default'),
                             name: nameController.text.isNotEmpty
                                 ? nameController.text
                                 : 'U',
-                            imageUrl: user?.avatarUrl,
+                            imageUrl: tempAvatarUrl ?? user?.avatarUrl,
                             size: 80,
                             showGradientBorder: true,
                           ),
+                          if (isUploadingAvatar)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.5),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
                           Positioned(
                             right: 0,
                             bottom: 0,
@@ -368,6 +440,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           setDialogState(() => isLoading = true);
                           await ref.read(authProvider.notifier).updateProfile(
                                 fullName: nameController.text,
+                                avatarUrl: tempAvatarUrl,
                               );
                           if (mounted) {
                             Navigator.pop(context);
@@ -435,7 +508,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Widget _buildWatcherManagement() {
     final myWatchers = ref.watch(energyProvider).myWatchers ?? [];
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -469,11 +542,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           )
         else
-          ...myWatchers.map((watcher) => _buildWatcherItem(
-                watcher.username, 
-                tr('full_access'), 
-                true
-              )),
+          ...myWatchers.map((watcher) =>
+              _buildWatcherItem(watcher.username, tr('full_access'), true)),
         const SizedBox(height: 12),
         _buildAddWatcherButton(),
       ],
@@ -674,7 +744,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isGranted ? tr('permission_granted') : tr('permission_not_granted'),
+                          isGranted
+                              ? tr('permission_granted')
+                              : tr('permission_not_granted'),
                           style: TextStyle(
                             fontSize: 12,
                             color: isGranted
@@ -785,7 +857,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 child: OutlinedButton(
                   onPressed: () {
                     ref.read(authProvider.notifier).logout();
-                    Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                    Navigator.pushNamedAndRemoveUntil(
+                        context, '/', (route) => false);
                   },
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Color(0xFF535f6f)),
@@ -858,5 +931,4 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       },
     );
   }
-
 }

@@ -3,9 +3,11 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.schemas.user_schema import User, UserCreate, UserAuth, LoginResponse, UserUpdate, UserSettings, UserSettingsUpdate, RefreshTokenRequest, Token
+from app.schemas.upload_schema import AvatarUpdateRequest
 from app.services.auth_service import AuthService
 from app.api.deps import get_current_user
 from app.models.user import User as UserModel
+from app.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -109,3 +111,21 @@ def update_user_settings(
             detail="User settings not found"
         )
     return updated_settings
+
+
+@router.put("/me/avatar", response_model=User)
+def update_avatar(
+    request: AvatarUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    if settings.R2_PUBLIC_URL and not request.avatar_url.startswith(settings.R2_PUBLIC_URL):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid avatar URL"
+        )
+
+    current_user.avatar_url = request.avatar_url
+    db.commit()
+    db.refresh(current_user)
+    return current_user

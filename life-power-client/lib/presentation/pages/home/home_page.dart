@@ -150,6 +150,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     // Fetch current day's signal from server to restore water/mood
     final dailySignal = await apiService.getDailySignal();
+    debugPrint('[HomePage] _loadData - dailySignal: ${dailySignal?.moodScore}, water: ${dailySignal?.waterIntake}');
 
     if (mounted) {
       setState(() {
@@ -160,6 +161,7 @@ class _HomePageState extends ConsumerState<HomePage>
         if (dailySignal != null) {
           _waterIntake = dailySignal.waterIntake ?? 0;
           _moodScore = dailySignal.moodScore ?? 0;
+          debugPrint('[HomePage] _loadData - setState _moodScore: ${_moodScore}');
         }
         _isDataLoaded = true;
       });
@@ -496,8 +498,8 @@ class _HomePageState extends ConsumerState<HomePage>
                 child: _buildInsightCard(
                     icon: Icons.auto_awesome,
                     iconColor: const Color(0xFFff4d6d),
-                    title: tr('aura_sync'),
-                    value: _getAuraSyncStatus(energy.level))),
+                    title: tr('energy_status'),
+                    value: _getEnergyLevelLabel(energy.level))),
           ],
         ),
         const SizedBox(height: 16),
@@ -727,6 +729,7 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   String _getCurrentMoodText() {
+    debugPrint('[HomePage] _getCurrentMoodText - _moodScore: $_moodScore');
     if (_moodScore == 0) return tr('not_set');
     return tr(_feelings.entries
         .firstWhere((e) => e.value == _moodScore,
@@ -810,8 +813,9 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> _syncManualData(int water, int mood) async {
+    debugPrint('[HomePage] _syncManualData called - water: $water, mood: $mood');
+
     if (!_isDataLoaded) {
-      // If data isn't loaded yet, try to load it first to avoid overwriting with defaults
       await _loadHealthData();
     }
 
@@ -819,9 +823,11 @@ class _HomePageState extends ConsumerState<HomePage>
     final apiService = ref.read(api.apiServiceProvider);
 
     final healthData = await healthService.syncHealthData();
+    debugPrint('[HomePage] _syncManualData - healthData: ${healthData?.steps}');
+
     if (healthData != null) {
-      // Re-fetch latest from server to be absolutely sure we have the latest other fields
       final latestSignal = await apiService.getDailySignal();
+      debugPrint('[HomePage] _syncManualData - latestSignal mood: ${latestSignal?.moodScore}');
 
       _addLog(
           'HomePage: Manual sync data - steps: ${healthData.steps}, sleepHours: ${healthData.sleepHours}, activeMinutes: ${healthData.activeMinutes}, waterIntake: $water, moodScore: $mood');
@@ -832,17 +838,25 @@ class _HomePageState extends ConsumerState<HomePage>
           steps: healthData.steps,
           sleepHours: healthData.sleepHours,
           activeMinutes: healthData.activeMinutes,
-          // Use the provided water/mood, but if we just fetched latest, maybe use those if they are newer?
-          // For now, trust the caller's water/mood as they are the ones doing the action.
           waterIntake: water,
           moodScore: mood > 0 ? mood : (latestSignal?.moodScore),
         ),
       );
+      debugPrint('[HomePage] _syncManualData - createSignal called with moodScore: ${mood > 0 ? mood : (latestSignal?.moodScore)}');
+
       await ref.read(energyProvider.notifier).getCurrentEnergy();
 
       _addLog('HomePage: Manual sync completed successfully');
     } else {
-      _addLog('HomePage: No health data for manual sync');
+      debugPrint('[HomePage] _syncManualData - healthData is null, trying with minimal data');
+      // 即使没有健康数据，也尝试同步 mood
+      await apiService.createSignal(
+        SignalFeatureCreate(
+          date: DateTime.now(),
+          moodScore: mood,
+        ),
+      );
+      debugPrint('[HomePage] _syncManualData - createSignal called with moodScore: $mood');
     }
   }
 
@@ -916,10 +930,20 @@ class _HomePageState extends ConsumerState<HomePage>
             ])));
   }
 
-  String _getAuraSyncStatus(String level) {
-    if (level == 'high') return tr('aura_active');
-    if (level == 'medium') return tr('aura_stable');
-    return tr('aura_low');
+  String _getEnergyLevelLabel(String level) {
+    switch (level.toLowerCase()) {
+      case 'high':
+      case 'energetic':
+        return tr('energy_high');
+      case 'medium':
+      case 'balanced':
+        return tr('energy_medium');
+      case 'low':
+      case 'low battery':
+        return tr('energy_low');
+      default:
+        return level;
+    }
   }
 
   Widget _buildWelcomePage(BuildContext context) {

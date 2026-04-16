@@ -1,4 +1,100 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:crypto/crypto.dart';
+
+class AvatarImageCache {
+  static final AvatarImageCache _instance = AvatarImageCache._internal();
+  factory AvatarImageCache() => _instance;
+  AvatarImageCache._internal();
+
+  final Map<String, Uint8List> _memoryCache = {};
+  Directory? _cacheDir;
+
+  Future<Directory> get cacheDirectory async {
+    if (_cacheDir == null) {
+      _cacheDir = await getTemporaryDirectory();
+      final avatarCacheDir = Directory('${_cacheDir!.path}/avatar_cache');
+      if (!avatarCacheDir.existsSync()) {
+        avatarCacheDir.createSync(recursive: true);
+      }
+      _cacheDir = avatarCacheDir;
+    }
+    return _cacheDir!;
+  }
+
+  String _hashUrl(String url) {
+    final bytes = utf8.encode(url);
+    return md5.convert(bytes).toString();
+  }
+
+  Future<Uint8List?> getFromMemory(String url) async {
+    return _memoryCache[url];
+  }
+
+  Uint8List? getFromMemorySync(String url) {
+    return _memoryCache[url];
+  }
+
+  Future<Uint8List?> getFromDisk(String url) async {
+    try {
+      final cacheDir = await cacheDirectory;
+      final file = File('${cacheDir.path}/${_hashUrl(url)}');
+      if (file.existsSync()) {
+        final bytes = await file.readAsBytes();
+        _memoryCache[url] = bytes;
+        return bytes;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> saveToMemory(String url, Uint8List bytes) async {
+    _memoryCache[url] = bytes;
+  }
+
+  Future<void> saveToDisk(String url, Uint8List bytes) async {
+    try {
+      final cacheDir = await cacheDirectory;
+      final file = File('${cacheDir.path}/${_hashUrl(url)}');
+      await file.writeAsBytes(bytes);
+    } catch (_) {}
+  }
+
+  Future<Uint8List?> get(String url) async {
+    var cached = await getFromMemory(url);
+    if (cached != null) return cached;
+
+    cached = await getFromDisk(url);
+    if (cached != null) return cached;
+
+    return null;
+  }
+
+  Future<Uint8List?> fetchAndCache(String url) async {
+    try {
+      final response = await Dio().get<List<int>>(
+        url,
+        options: Options(
+          responseType: ResponseType.bytes,
+          followRedirects: true,
+          validateStatus: (status) => status != null && status < 400,
+        ),
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        final bytes = Uint8List.fromList(response.data!);
+        await saveToMemory(url, bytes);
+        await saveToDisk(url, bytes);
+        return bytes;
+      }
+    } catch (_) {}
+    return null;
+  }
+}
 
 class WatcherAvatar extends StatelessWidget {
   final String name;
@@ -26,9 +122,9 @@ class WatcherAvatar extends StatelessWidget {
         child: Container(
           width: size,
           height: size,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFd9e5e6),
+            color: Color(0xFFd9e5e6),
           ),
           child: Icon(
             Icons.add,
@@ -46,9 +142,9 @@ class WatcherAvatar extends StatelessWidget {
         height: showGradientBorder ? size + 4 : size,
         padding: const EdgeInsets.all(2),
         decoration: showGradientBorder
-            ? BoxDecoration(
+            ? const BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   colors: [Color(0xFF535f6f), Color(0xFFd7e3f7)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -58,20 +154,16 @@ class WatcherAvatar extends StatelessWidget {
         child: Container(
           width: size,
           height: size,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFf0f4f5),
+            color: Color(0xFFf0f4f5),
           ),
           child: ClipOval(
             child: imageUrl != null && imageUrl!.isNotEmpty
-                ? Image.network(
-                    imageUrl!,
-                    width: size,
-                    height: size,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return _buildInitials();
-                    },
+                ? CachedAvatarImage(
+                    imageUrl: imageUrl!,
+                    size: size,
+                    fallback: _buildInitials(),
                   )
                 : _buildInitials(),
           ),
@@ -82,7 +174,12 @@ class WatcherAvatar extends StatelessWidget {
 
   Widget _buildInitials() {
     final initials = name.isNotEmpty
-        ? name.split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase()
+        ? name
+            .split(' ')
+            .map((e) => e.isNotEmpty ? e[0] : '')
+            .take(2)
+            .join()
+            .toUpperCase()
         : '?';
     return Container(
       width: size,
@@ -96,6 +193,103 @@ class WatcherAvatar extends StatelessWidget {
             fontWeight: FontWeight.bold,
             color: const Color(0xFF535f6f),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class CachedAvatarImage extends StatefulWidget {
+  final String imageUrl;
+  final double size;
+  final Widget fallback;
+
+  const CachedAvatarImage({
+    super.key,
+    required this.imageUrl,
+    required this.size,
+    required this.fallback,
+  });
+
+  @override
+  State<CachedAvatarImage> createState() => _CachedAvatarImageState();
+}
+
+class _CachedAvatarImageState extends State<CachedAvatarImage> {
+  static final AvatarImageCache _cache = AvatarImageCache();
+  Uint8List? _imageData;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageData = _cache.getFromMemorySync(widget.imageUrl);
+    if (_imageData == null) {
+      _isLoading = true;
+      _loadImage();
+    }
+  }
+
+  Future<void> _loadImage() async {
+    final cached = await _cache.get(widget.imageUrl);
+    if (cached != null && mounted) {
+      setState(() {
+        _imageData = cached;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final fetched = await _cache.fetchAndCache(widget.imageUrl);
+    if (mounted) {
+      setState(() {
+        _imageData = fetched;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: Center(
+          child: _ImagePlaceholder(size: widget.size),
+        ),
+      );
+    }
+
+    if (_imageData != null) {
+      return Image.memory(
+        _imageData!,
+        width: widget.size,
+        height: widget.size,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
+    }
+
+    return widget.fallback;
+  }
+}
+
+class _ImagePlaceholder extends StatelessWidget {
+  final double size;
+
+  const _ImagePlaceholder({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      color: const Color(0xFFf0f4f5),
+      child: const Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Color(0xFF535f6f),
         ),
       ),
     );
@@ -122,7 +316,8 @@ class WatcherAvatarList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayCount = watchers.length > maxDisplay ? maxDisplay : watchers.length;
+    final displayCount =
+        watchers.length > maxDisplay ? maxDisplay : watchers.length;
     final remainingCount = watchers.length - maxDisplay;
 
     return Row(

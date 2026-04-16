@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.models.energy import EnergySnapshot, SignalFeatureDaily
 from app.utils.energy_calc import calculate_energy_score
+from app.utils.debug_utils import format_datetime, debug_datetime_list, debug_log
 
 
 class EnergyEngine:
@@ -38,10 +39,15 @@ class EnergyEngine:
         获取用户能量历史
         """
         start_date = datetime.utcnow() - timedelta(days=days)
-        return db.query(EnergySnapshot).filter(
+        print(debug_log(f"get_energy_history user_id={user_id}, days={days}, start={format_datetime(start_date)}"))
+
+        results = db.query(EnergySnapshot).filter(
             EnergySnapshot.user_id == user_id,
             EnergySnapshot.created_at >= start_date
         ).order_by(EnergySnapshot.created_at.desc()).all()
+
+        print(debug_log(f"Found {len(results)} snapshots for user_id={user_id}"))
+        return results
     
     @staticmethod
     def save_snapshot(db: Session, snapshot: EnergySnapshot) -> EnergySnapshot:

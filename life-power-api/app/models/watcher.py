@@ -21,12 +21,13 @@ class WatcherRelation(Base):
 
 class CareMessage(Base):
     __tablename__ = "care_messages"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     recipient_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(Text, nullable=False)
     emoji_response = Column(String, nullable=True)
+    energy_boosted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

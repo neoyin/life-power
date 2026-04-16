@@ -27,15 +27,20 @@ def run_migration():
     engine = create_engine(DATABASE_URL)
 
     migrations = [
+        # {
+        #     "description": "Add breathing_sessions column",
+        #     "check": "SELECT column_name FROM information_schema.columns WHERE table_name='signal_feature_daily' AND column_name='breathing_sessions';",
+        #     "sql": "ALTER TABLE signal_feature_daily ADD COLUMN breathing_sessions INTEGER DEFAULT 0;",
+        # },
+        # {
+        #     "description": "Add unique constraint (user_id, date)",
+        #     "check": "SELECT constraint_name FROM information_schema.table_constraints WHERE table_name='signal_feature_daily' AND constraint_name='uq_signal_user_date';",
+        #     "sql": "ALTER TABLE signal_feature_daily ADD CONSTRAINT uq_signal_user_date UNIQUE (user_id, date);",
+        # },
         {
-            "description": "Add breathing_sessions column",
-            "check": "SELECT column_name FROM information_schema.columns WHERE table_name='signal_feature_daily' AND column_name='breathing_sessions';",
-            "sql": "ALTER TABLE signal_feature_daily ADD COLUMN breathing_sessions INTEGER DEFAULT 0;",
-        },
-        {
-            "description": "Add unique constraint (user_id, date)",
-            "check": "SELECT constraint_name FROM information_schema.table_constraints WHERE table_name='signal_feature_daily' AND constraint_name='uq_signal_user_date';",
-            "sql": "ALTER TABLE signal_feature_daily ADD CONSTRAINT uq_signal_user_date UNIQUE (user_id, date);",
+            "description": "Add energy_boosted column to care_messages",
+            "check": "SELECT column_name FROM information_schema.columns WHERE table_name='care_messages' AND column_name='energy_boosted';",
+            "sql": "ALTER TABLE care_messages ADD COLUMN energy_boosted BOOLEAN DEFAULT FALSE;",
         },
     ]
 

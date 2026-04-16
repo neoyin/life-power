@@ -220,7 +220,8 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         WatcherAvatar(
-                          name: watcher.username,
+                          key: ValueKey(watcher.avatarUrl ?? watcher.username),
+                          name: watcher.fullName ?? watcher.username,
                           imageUrl: watcher.avatarUrl,
                           size: 64,
                           showGradientBorder: true,
@@ -230,7 +231,7 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
                         SizedBox(
                           width: 68,
                           child: Text(
-                            watcher.username,
+                            watcher.fullName ?? watcher.username,
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -341,13 +342,16 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
         ),
         child: Row(
           children: [
-            Stack(
-              children: [
-                WatcherAvatar(
-                  name: watcher.username,
-                  size: 56,
-                  showGradientBorder: true,
-                ),
+                Stack(
+                  children: [
+                    WatcherAvatar(
+                      key: ValueKey(watcher.avatarUrl ?? watcher.username),
+                      name: watcher.fullName ?? watcher.username,
+                      imageUrl: watcher.avatarUrl,
+                      size: 56,
+                      showGradientBorder: true,
+                      onTap: () => _navigateToWatcherDetail(watcher),
+                    ),
                 Positioned(
                   right: 0,
                   bottom: 0,
@@ -372,7 +376,7 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    watcher.username,
+                    watcher.fullName ?? watcher.username,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -436,7 +440,7 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(tr('remove_watcher')),
-        content: Text('${tr('remove_watcher_confirm')} ${watcher.username}?'),
+        content: Text('${tr('remove_watcher_confirm')} ${watcher.fullName ?? watcher.username}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -669,7 +673,7 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
   void _showSendCareDialog(watcher) {
     CareMessageDialog.show(
       context: context,
-      recipientName: watcher.username,
+      recipientName: watcher.fullName ?? watcher.username,
       recipientId: watcher.user_id,
       onSend: (message) async {
         try {

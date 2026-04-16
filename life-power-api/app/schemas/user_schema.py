@@ -7,6 +7,7 @@ class UserBase(BaseModel):
     username: str
     email: EmailStr
     full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -22,7 +23,7 @@ class UserInDB(UserBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 

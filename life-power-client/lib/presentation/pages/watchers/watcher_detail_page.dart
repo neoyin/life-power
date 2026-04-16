@@ -168,6 +168,22 @@ class _WatcherDetailPageState extends ConsumerState<WatcherDetailPage> {
     }
   }
 
+  String _getEnergyLevelLabel(String level) {
+    switch (level.toLowerCase()) {
+      case 'high':
+      case 'energetic':
+        return tr('energy_high');
+      case 'medium':
+      case 'balanced':
+        return tr('energy_medium');
+      case 'low':
+      case 'low battery':
+        return tr('energy_low');
+      default:
+        return level;
+    }
+  }
+
   Color _getEnergyColor(String level) {
     switch (level.toLowerCase()) {
       case 'high':
@@ -309,7 +325,9 @@ class _WatcherDetailPageState extends ConsumerState<WatcherDetailPage> {
           alignment: Alignment.center,
           children: [
             WatcherAvatar(
+              key: ValueKey(detail.avatarUrl ?? 'default'),
               name: _username,
+              imageUrl: detail.avatarUrl,
               size: 90,
               showGradientBorder: true,
             ),
@@ -416,7 +434,7 @@ class _WatcherDetailPageState extends ConsumerState<WatcherDetailPage> {
         children: [
           _buildStatItem(
             Icons.bolt,
-            detail.energyLevel.toUpperCase(),
+            _getEnergyLevelLabel(detail.energyLevel),
             tr('energy_status'),
             _getEnergyColor(detail.energyLevel),
           ),
@@ -442,34 +460,34 @@ class _WatcherDetailPageState extends ConsumerState<WatcherDetailPage> {
   Widget _buildStatItem(
       IconData icon, String value, String label, Color color) {
     return SizedBox(
-      width: 60,
+      width: 55,
       child: Column(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: color, size: 18),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             value,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
               color: color,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             label,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               color: Color(0xFF727d7e),
             ),
           ),
@@ -640,7 +658,7 @@ class _WatcherDetailPageState extends ConsumerState<WatcherDetailPage> {
         children: [
           Row(
             children: [
-              const Icon(Icons.chat_bubble_outline, color: Color(0xFF535f6f)),
+              const Icon(Icons.sms_outlined, color: Color(0xFF535f6f)),
               const SizedBox(width: 8),
               Text(
                 tr('message_history'),
@@ -836,12 +854,12 @@ class _WatcherDetailPageState extends ConsumerState<WatcherDetailPage> {
   }
 
   Widget _buildActionButtons(UserDetail detail) {
+    final isAccepted = detail.relationStatus == 'accepted' || detail.relationStatus == 'mutual';
+    final isWatchingMe = detail.relationStatus == 'watching';
+
     return Column(
       children: [
-        if (!detail.isWatching &&
-            !detail.isMutual &&
-            !detail.isPending &&
-            detail.relationStatus == 'none')
+        if (detail.relationStatus == 'none')
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -881,19 +899,43 @@ class _WatcherDetailPageState extends ConsumerState<WatcherDetailPage> {
               ],
             ),
           ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: TextButton(
-            onPressed: () => _showRemoveConfirmation(detail),
-            child: Text(
-              tr('remove_watcher'),
-              style: const TextStyle(
-                color: Color(0xFF9f403d),
+        if (isWatchingMe) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _sendWatchRequest,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4a90d9),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                tr('watch_back'),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+        ],
+        if (isAccepted)
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => _showRemoveConfirmation(detail),
+              child: Text(
+                tr('remove_watcher'),
+                style: const TextStyle(
+                  color: Color(0xFF9f403d),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
