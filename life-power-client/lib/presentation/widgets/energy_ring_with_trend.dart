@@ -8,6 +8,7 @@ class EnergyRingWithTrend extends StatefulWidget {
   final int? trendChange;
   final String? insight;
   final double size;
+  final VoidCallback? onTap;
 
   const EnergyRingWithTrend({
     Key? key,
@@ -16,6 +17,7 @@ class EnergyRingWithTrend extends StatefulWidget {
     this.trendChange,
     this.insight,
     this.size = 288,
+    this.onTap,
   }) : super(key: key);
 
   @override
@@ -23,13 +25,22 @@ class EnergyRingWithTrend extends StatefulWidget {
 }
 
 class _EnergyRingWithTrendState extends State<EnergyRingWithTrend>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  late AnimationController _tapController;
+  late Animation<double> _tapAnimation;
+  late AnimationController _progressController;
+  late Animation<double> _progressAnimation;
+  late AnimationController _flashController;
+  late Animation<double> _flashAnimation;
+
+  bool _isProgressComplete = false;
 
   @override
   void initState() {
     super.initState();
+
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
@@ -38,12 +49,94 @@ class _EnergyRingWithTrendState extends State<EnergyRingWithTrend>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _pulseController.repeat(reverse: true);
+
+    _tapController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _tapAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _tapController, curve: Curves.easeOut),
+    );
+
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _progressAnimation = Tween<double>(
+      begin: 0,
+      end: widget.score / 100,
+    ).animate(CurvedAnimation(
+      parent: _progressController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _progressController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (mounted) {
+          setState(() {
+            _isProgressComplete = true;
+          });
+        }
+      } else if (status == AnimationStatus.forward) {
+        if (mounted && _isProgressComplete) {
+          setState(() {
+            _isProgressComplete = false;
+          });
+        }
+      }
+    });
+
+    _progressController.forward();
+
+    _flashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _flashAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _flashController, curve: Curves.linear),
+    );
+
+    if (widget.score < 40) {
+      _flashController.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(EnergyRingWithTrend oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.score != widget.score) {
+      final currentScore = (_progressAnimation.value * 100).round();
+      _progressAnimation = Tween<double>(
+        begin: currentScore / 100,
+        end: widget.score / 100,
+      ).animate(CurvedAnimation(
+        parent: _progressController,
+        curve: Curves.easeOutCubic,
+      ));
+      _progressController.forward(from: 0);
+
+      if (widget.score < 40) {
+        _flashController.repeat(reverse: true);
+      } else {
+        _flashController.stop();
+      }
+    }
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _tapController.dispose();
+    _progressController.dispose();
+    _flashController.dispose();
     super.dispose();
+  }
+
+  void _onTap() {
+    _tapController.forward().then((_) => _tapController.reverse());
+    if (widget.onTap != null) {
+      widget.onTap!();
+    }
   }
 
   @override
@@ -51,142 +144,172 @@ class _EnergyRingWithTrendState extends State<EnergyRingWithTrend>
     final energyColor = AppTheme.getEnergyColor(widget.level);
     final strokeWidth = 14.0;
 
-    return AnimatedBuilder(
-      animation: _pulseAnimation,
-      builder: (context, child) {
-        return SizedBox(
-          width: widget.size,
-          height: widget.size + 100,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: widget.size,
-                height: widget.size,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 500),
-                      width: widget.size * 0.76 * _pulseAnimation.value,
-                      height: widget.size * 0.76 * _pulseAnimation.value,
+    return GestureDetector(
+      onTap: _onTap,
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size + 100,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedBuilder(
+              animation: _tapAnimation,
+              builder: (context, child) {
+                return Transform.scale(
+                  scale: _tapAnimation.value,
+                  child: SizedBox(
+                    width: widget.size,
+                    height: widget.size,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        AnimatedBuilder(
+                          animation: Listenable.merge([_pulseAnimation, _flashAnimation]),
+                          builder: (context, child) => _buildGlowEffect(energyColor),
+                        ),
+                        SizedBox(
+                          width: widget.size * 0.76,
+                          height: widget.size * 0.76,
+                          child: CircularProgressIndicator(
+                            value: 1.0,
+                            strokeWidth: strokeWidth,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              const Color(0xFFd9e5e6).withOpacity(0.2),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: widget.size * 0.76,
+                          height: widget.size * 0.76,
+                          child: AnimatedBuilder(
+                            animation: _progressAnimation,
+                            builder: (context, child) => CircularProgressIndicator(
+                              value: _progressAnimation.value,
+                              strokeWidth: strokeWidth,
+                              valueColor: AlwaysStoppedAnimation<Color>(energyColor),
+                            ),
+                          ),
+                        ),
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                textBaseline: TextBaseline.alphabetic,
+                                children: [
+                                  AnimatedBuilder(
+                                    animation: _progressAnimation,
+                                    builder: (context, child) {
+                                      final currentScore = (_progressAnimation.value * 100).round();
+                                      return Text(
+                                        '$currentScore',
+                                        style: const TextStyle(
+                                          fontSize: 88,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF2a3435),
+                                          height: 1,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  const Text(
+                                    '%',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF475363),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (widget.trendChange != null)
+                              _buildTrendBadge(energyColor),
+                            const SizedBox(height: 8),
+                            Text(
+                              tr('current_energy').toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF566162),
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            AnimatedOpacity(
+              opacity: _isProgressComplete ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 500),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 16),
+                  if (widget.insight != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: energyColor.withOpacity(0.3),
-                            blurRadius: 30 * _pulseAnimation.value,
-                            spreadRadius: 5 * (_pulseAnimation.value - 1),
+                        color: energyColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.lightbulb_outline,
+                            size: 16,
+                            color: energyColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              widget.insight!,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: energyColor,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    SizedBox(
-                      width: widget.size * 0.76,
-                      height: widget.size * 0.76,
-                      child: CircularProgressIndicator(
-                        value: 1.0,
-                        strokeWidth: strokeWidth,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          const Color(0xFFd9e5e6).withOpacity(0.2),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: widget.size * 0.76,
-                      height: widget.size * 0.76,
-                      child: CircularProgressIndicator(
-                        value: widget.score / 100,
-                        strokeWidth: strokeWidth,
-                        valueColor: AlwaysStoppedAnimation<Color>(energyColor),
-                      ),
-                    ),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                '${widget.score}',
-                                style: const TextStyle(
-                                  fontSize: 88,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF2a3435),
-                                  height: 1,
-                                ),
-                              ),
-                              const Text(
-                                '%',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF475363),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (widget.trendChange != null)
-                          _buildTrendBadge(energyColor),
-                        const SizedBox(height: 8),
-                        Text(
-                          tr('current_energy').toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF566162),
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
-                ),
+                  const SizedBox(height: 12),
+                  _buildEncouragementText(widget.score),
+                ],
               ),
-              if (widget.insight != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: energyColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.lightbulb_outline,
-                        size: 16,
-                        color: energyColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          widget.insight!,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: energyColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              _buildEncouragementText(widget.score),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlowEffect(Color energyColor) {
+    final flashOpacity = widget.score < 40 ? _flashAnimation.value : 0.3;
+    return Container(
+      width: widget.size * 0.76 * _pulseAnimation.value,
+      height: widget.size * 0.76 * _pulseAnimation.value,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: energyColor.withOpacity(flashOpacity),
+            blurRadius: 30 * _pulseAnimation.value,
+            spreadRadius: 5 * (_pulseAnimation.value - 1),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 

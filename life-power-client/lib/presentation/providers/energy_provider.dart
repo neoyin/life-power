@@ -12,6 +12,7 @@ final energyProvider = StateNotifierProvider<EnergyNotifier, EnergyState>((ref) 
 class EnergyState {
   final EnergyCurrent? currentEnergy;
   final EnergyHistory? history;
+  final SignalFeature? todaySignal;
   final List<WatcherInfo>? watchers;
   final List<User>? myWatchers;
   final List<WatcherRelation>? pendingRequests;
@@ -23,6 +24,7 @@ class EnergyState {
   EnergyState({
     this.currentEnergy,
     this.history,
+    this.todaySignal,
     this.watchers,
     this.myWatchers,
     this.pendingRequests,
@@ -35,6 +37,7 @@ class EnergyState {
   EnergyState copyWith({
     EnergyCurrent? currentEnergy,
     EnergyHistory? history,
+    SignalFeature? todaySignal,
     List<WatcherInfo>? watchers,
     List<User>? myWatchers,
     List<WatcherRelation>? pendingRequests,
@@ -46,6 +49,7 @@ class EnergyState {
     return EnergyState(
       currentEnergy: currentEnergy ?? this.currentEnergy,
       history: history ?? this.history,
+      todaySignal: todaySignal ?? this.todaySignal,
       watchers: watchers ?? this.watchers,
       myWatchers: myWatchers ?? this.myWatchers,
       pendingRequests: pendingRequests ?? this.pendingRequests,
@@ -77,6 +81,16 @@ class EnergyNotifier extends StateNotifier<EnergyState> {
     try {
       final history = await _apiService.getEnergyHistory(days: days);
       state = state.copyWith(history: history, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> getTodaySignal() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final signal = await _apiService.getDailySignal();
+      state = state.copyWith(todaySignal: signal, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }

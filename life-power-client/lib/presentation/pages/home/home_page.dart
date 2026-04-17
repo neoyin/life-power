@@ -18,6 +18,7 @@ import 'package:life_power_client/presentation/widgets/energy_ring_with_trend.da
 import 'package:life_power_client/presentation/widgets/care_banner.dart';
 import 'package:life_power_client/presentation/widgets/skeleton_loading.dart';
 import 'package:life_power_client/presentation/widgets/sync_status_indicator.dart';
+import 'package:life_power_client/presentation/widgets/suggestion_engine.dart';
 import 'dart:async';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -39,6 +40,8 @@ class _HomePageState extends ConsumerState<HomePage>
   SyncStatus _syncStatus = SyncStatus.idle;
   List<String> _logMessages = [];
   Timer? _reminderTimer;
+  bool _suggestionDismissed = false;
+  bool _isWaterCooldown = false;
 
   late AnimationController _waterAnimController;
 
@@ -106,6 +109,7 @@ class _HomePageState extends ConsumerState<HomePage>
       final authState = ref.read(authProvider);
       if (authState.user != null) {
         ref.read(energyProvider.notifier).getCurrentEnergy();
+        ref.read(energyProvider.notifier).getTodaySignal();
         ref.read(energyProvider.notifier).getWatchers();
         ref.read(energyProvider.notifier).getEnergyHistory();
         ref.read(energyProvider.notifier).getCareMessages();
@@ -143,7 +147,12 @@ class _HomePageState extends ConsumerState<HomePage>
     if (_lastWaterTime == null) return true;
     final now = DateTime.now();
     if (now.hour < 7 || now.hour >= 21) return false;
-    return now.difference(_lastWaterTime!).inHours >= 2;
+    return now.difference(_lastWaterTime!).inMinutes >= 15;
+  }
+
+  bool _canDrinkWater() {
+    if (_lastWaterTime == null) return true;
+    return DateTime.now().difference(_lastWaterTime!).inMinutes >= 15;
   }
 
   bool _shouldShowMoodReminder() {
@@ -268,7 +277,7 @@ class _HomePageState extends ConsumerState<HomePage>
       appBar: _buildAppBar(context, authState, energyState),
       body: Stack(
         children: [
-          energyState.isLoading || energyState.currentEnergy == null
+          energyState.currentEnergy == null
               ? const HomePageSkeleton()
               : _buildEnergyContent(context, energyState),
           if (energyState.careMessages != null)
@@ -294,7 +303,7 @@ class _HomePageState extends ConsumerState<HomePage>
                   ),
                   const SizedBox(height: 12),
                 ],
-                if (_shouldShowWaterReminder())
+                if (_shouldShowWaterReminder() && _canDrinkWater())
                   _buildFloatingReminder(
                     label: tr('go_drink_water'),
                     icon: Icons.water_drop,
@@ -418,7 +427,9 @@ class _HomePageState extends ConsumerState<HomePage>
         children: [
           const SizedBox(height: 32),
           _buildEnergyRingSection(context, energy),
-          const SizedBox(height: 48),
+          const SizedBox(height: 32),
+          _buildSuggestionCard(context, energyState),
+          const SizedBox(height: 16),
           _buildWatcherSection(context, energyState),
           const SizedBox(height: 32),
           _buildInsightBentoGrid(context, energy),
@@ -449,6 +460,105 @@ class _HomePageState extends ConsumerState<HomePage>
       level: energy.level,
       trendChange: trendChange,
       insight: insight,
+      onTap: () => _showEnergyDetail(context, energy, trendChange, insight),
+    );
+  }
+
+  void _showEnergyDetail(BuildContext context, EnergyCurrent energy,
+      int? trendChange, String? insight) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Color(0xFFfafafa),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFd0d5d6),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              tr('energy_detail_title'),
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2a3435),
+              ),
+            ),
+            const SizedBox(height: 20),
+            _buildDetailRow(tr('current_score'), '${energy.score}%'),
+            const SizedBox(height: 12),
+            _buildDetailRow(tr('energy_level'), tr(energy.level.toLowerCase())),
+            const SizedBox(height: 12),
+            if (trendChange != null)
+              _buildDetailRow(
+                tr('trend_vs_yesterday'),
+                trendChange >= 0 ? '+$trendChange%' : '$trendChange%',
+              ),
+            const SizedBox(height: 12),
+            if (insight != null) _buildDetailRow(tr('insight'), insight),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2a3435),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  tr('got_it'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Color(0xFF727d7e),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF2a3435),
+          ),
+        ),
+      ],
     );
   }
 
@@ -495,6 +605,100 @@ class _HomePageState extends ConsumerState<HomePage>
         'userId': user.id,
       },
     );
+  }
+
+  Widget _buildSuggestionCard(BuildContext context, EnergyState energyState) {
+    if (_suggestionDismissed) return const SizedBox.shrink();
+
+    final energy = energyState.currentEnergy;
+    if (energy == null) return const SizedBox.shrink();
+
+    final SignalFeature? todaySignal = energyState.todaySignal;
+    final unreadMessages = (energyState.careMessages ?? [])
+        .where((m) => m.emojiResponse == null)
+        .length;
+
+    final suggestions = SuggestionEngine.generateSuggestions(
+      energy: energy,
+      todaySignal: todaySignal,
+      unreadMessages: unreadMessages,
+    );
+
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+
+    final suggestion = suggestions.first;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            suggestion.color.withOpacity(0.15),
+            suggestion.color.withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: suggestion.color.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: suggestion.color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              suggestion.icon,
+              color: suggestion.color,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  suggestion.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2a3435),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  suggestion.message,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF566162),
+                    height: 1.4,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            SuggestionEngine.getIconEmoji(suggestion.type),
+            style: const TextStyle(fontSize: 28),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _dismissSuggestion() {
+    setState(() => _suggestionDismissed = true);
   }
 
   Widget _buildInsightBentoGrid(BuildContext context, EnergyCurrent energy) {
@@ -779,49 +983,66 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Widget _buildWaterCard() {
+    final isDisabled = _isWaterCooldown || _waterIntake >= 2000;
     return GestureDetector(
-      onTap: _addWaterWithAnimation,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFf0f4f5),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.water_drop,
-                    color: Color(0xFF4ea8de), size: 18),
-                const Spacer(),
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: _waterIntake >= 2000
-                        ? const Color(0xFF4ea8de)
-                        : const Color(0xFF727d7e),
-                    shape: BoxShape.circle,
+      onTap: isDisabled ? null : _addWaterWithAnimation,
+      child: AbsorbPointer(
+        absorbing: isDisabled,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          decoration: BoxDecoration(
+            color:
+                isDisabled ? const Color(0xFFf7f7f7) : const Color(0xFFf0f4f5),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.water_drop,
+                    color: isDisabled
+                        ? const Color(0xFFc5c9ca)
+                        : const Color(0xFF4ea8de),
+                    size: 18,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${_waterIntake}ml',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2a3435),
+                  const Spacer(),
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: _waterIntake >= 2000
+                          ? const Color(0xFF4ea8de)
+                          : const Color(0xFF727d7e),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              tr('water'),
-              style: TextStyle(fontSize: 9, color: Color(0xFF727d7e)),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                '${_waterIntake}ml',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDisabled
+                      ? const Color(0xFFa8adaf)
+                      : const Color(0xFF2a3435),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                tr('water'),
+                style: TextStyle(
+                  fontSize: 9,
+                  color: isDisabled
+                      ? const Color(0xFFb8bcbc)
+                      : const Color(0xFF727d7e),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1071,9 +1292,8 @@ class _HomePageState extends ConsumerState<HomePage>
                       tr(option['key'] as String),
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
                         color: isSelected
                             ? (option['color'] as Color)
                             : const Color(0xFF2a3435),
@@ -1126,12 +1346,32 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> _addWaterWithAnimation() async {
+    if (_isWaterCooldown) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(tr('water_cooldown')),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     _waterAnimController.forward(from: 0);
     final newIntake = _waterIntake + 250;
-    setState(() => _waterIntake = newIntake);
+    setState(() {
+      _waterIntake = newIntake;
+      _isWaterCooldown = true;
+    });
     await ref.read(healthDataServiceProvider).updateLastWaterTime();
     await _checkReminders();
     await _syncManualData(newIntake, _moodScore);
+
+    Future.delayed(const Duration(minutes: 15), () {
+      if (mounted) {
+        setState(() => _isWaterCooldown = false);
+      }
+    });
   }
 
   Future<void> _syncManualData(int water, int mood) async {
