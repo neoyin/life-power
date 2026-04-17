@@ -14,6 +14,9 @@ import 'package:life_power_client/presentation/widgets/energy_ring.dart';
 import 'package:life_power_client/presentation/widgets/watcher_avatar.dart';
 import 'package:life_power_client/presentation/widgets/main_navigation_bar.dart';
 import 'package:life_power_client/presentation/widgets/energy_chart.dart';
+import 'package:life_power_client/presentation/widgets/energy_ring_with_trend.dart';
+import 'package:life_power_client/presentation/widgets/care_banner.dart';
+import 'package:life_power_client/presentation/widgets/skeleton_loading.dart';
 import 'dart:async';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -225,8 +228,16 @@ class _HomePageState extends ConsumerState<HomePage>
       body: Stack(
         children: [
           energyState.isLoading || energyState.currentEnergy == null
-              ? const Center(child: CircularProgressIndicator())
+              ? const HomePageSkeleton()
               : _buildEnergyContent(context, energyState),
+          if (energyState.careMessages != null)
+            CareBannerManager(
+              careMessages: energyState.careMessages ?? [],
+              onViewAll: () => Navigator.pushNamed(context, '/care'),
+              onMessageTap: (message) {
+                Navigator.pushNamed(context, '/care');
+              },
+            ),
           Positioned(
             bottom: 20,
             right: 20,
@@ -379,58 +390,22 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Widget _buildEnergyRingSection(BuildContext context, EnergyCurrent energy) {
-    final energyColor = AppTheme.getEnergyColor(energy.level);
-    return SizedBox(
-      width: 288,
-      height: 288,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 220,
-            height: 220,
-            child: CircularProgressIndicator(
-              value: energy.score / 100,
-              strokeWidth: 14,
-              backgroundColor: const Color(0xFFd9e5e6).withOpacity(0.2),
-              valueColor: AlwaysStoppedAnimation<Color>(energyColor),
-            ),
-          ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text('${energy.score}',
-                        style: const TextStyle(
-                            fontSize: 88,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF2a3435),
-                            height: 1)),
-                    const Text('%',
-                        style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF475363))),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(tr('current_energy').toUpperCase(),
-                  style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF566162),
-                      letterSpacing: 1)),
-            ],
-          ),
-        ],
-      ),
+    final history = ref.read(energyProvider).history;
+    final trendChange = EnergyTrendCalculator.calculateTrendChange(
+      history?.snapshots ?? [],
+      energy.score,
+    );
+    final insight = EnergyTrendCalculator.generateInsight(
+      energy.score,
+      energy.level,
+      trendChange,
+    );
+
+    return EnergyRingWithTrend(
+      score: energy.score,
+      level: energy.level,
+      trendChange: trendChange,
+      insight: insight,
     );
   }
 

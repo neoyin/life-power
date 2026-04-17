@@ -4,18 +4,15 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_power_client/core/router.dart';
 import 'package:life_power_client/core/theme.dart';
-import 'package:life_power_client/presentation/providers/locale_provider.dart';
+import 'package:life_power_client/core/i18n.dart';
 import 'package:step_logger/step_logger.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Request notification permission for Android 13+
   if (!kIsWeb) {
     await Permission.notification.request();
-
-    // Initialize StepLogger plugin (only on non-web platforms)
     await StepLogger.initialize();
   }
 
@@ -31,11 +28,10 @@ class LifePowerApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final locale = ref.watch(localeProvider);
-
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'LifePower',
-      locale: locale,
+      locale: const Locale('en'),
       supportedLocales: const [
         Locale('en'),
         Locale('zh'),

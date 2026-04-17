@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, date
 from typing import Any
 
 
@@ -72,11 +72,12 @@ def _format_value(value: Any) -> Any:
         return None
     if isinstance(value, datetime):
         return format_datetime(value)
+    if isinstance(value, date):
+        return format_datetime(datetime(value.year, value.month, value.day))
     if isinstance(value, (list, tuple)):
         return [_format_value(v) for v in value]
     if isinstance(value, dict):
         return {k: _format_value(v) for k, v in value.items()}
-    # SQLAlchemy 模型 - 通过检查是否有 __table__ 属性来判断
     if hasattr(value, '__table__'):
         return object_to_dict(value)
     return value

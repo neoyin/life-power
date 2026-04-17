@@ -234,6 +234,9 @@ class ApiService {
       final response = await _dio
           .get(Constants.energySignal, queryParameters: {'date': dateStr});
       debugPrint('[API] getDailySignal response: ${response.data}');
+      if (response.data == null) {
+        return null;
+      }
       return SignalFeature.fromJson(response.data);
     } catch (e) {
       debugPrint('[API] getDailySignal error: $e');
