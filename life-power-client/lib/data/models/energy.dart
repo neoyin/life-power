@@ -1,5 +1,18 @@
 import 'package:intl/intl.dart';
 
+DateTime _parseDateTime(dynamic value) {
+  if (value == null) return DateTime.now();
+  if (value is DateTime) return value;
+  if (value is String) {
+    try {
+      return DateTime.parse(value);
+    } catch (e) {
+      return DateTime.now();
+    }
+  }
+  return DateTime.now();
+}
+
 class EnergySnapshot {
   final int id;
   final int userId;
@@ -20,8 +33,8 @@ class EnergySnapshot {
   });
 
   factory EnergySnapshot.fromJson(Map<String, dynamic> json) {
-    String createdAtStr = json['created_at'];
-    if (!createdAtStr.endsWith('Z') && !createdAtStr.contains('+')) {
+    String createdAtStr = json['created_at']?.toString() ?? '';
+    if (!createdAtStr.endsWith('Z') && !createdAtStr.contains('+') && createdAtStr.isNotEmpty) {
       createdAtStr += 'Z';
     }
     return EnergySnapshot(
@@ -31,7 +44,7 @@ class EnergySnapshot {
       level: json['level'],
       trend: json['trend'],
       confidence: json['confidence'],
-      createdAt: DateTime.parse(createdAtStr),
+      createdAt: createdAtStr.isEmpty ? DateTime.now() : _parseDateTime(createdAtStr),
     );
   }
 
@@ -119,15 +132,15 @@ class SignalFeature {
     return SignalFeature(
       id: json['id'],
       userId: json['user_id'],
-      date: DateTime.parse(json['date']),
+      date: _parseDateTime(json['date']),
       steps: json['steps'],
       sleepHours: json['sleep_hours'],
       activeMinutes: json['active_minutes'],
       waterIntake: json['water_intake'],
       moodScore: json['mood_score'],
       breathingSessions: json['breathing_sessions'],
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      createdAt: _parseDateTime(json['created_at']),
+      updatedAt: _parseDateTime(json['updated_at']),
     );
   }
 

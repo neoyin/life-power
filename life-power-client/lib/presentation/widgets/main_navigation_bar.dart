@@ -30,9 +30,12 @@ class MainNavigationBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(context, 0, Icons.bolt, tr('nav_home'), '/'),
-              _buildNavItem(context, 1, Icons.battery_charging_full, tr('nav_charge'), '/charge'),
-              _buildNavItem(context, 2, Icons.group, tr('nav_watching'), '/watchers'),
-              _buildNavItem(context, 3, Icons.settings, tr('nav_settings'), '/settings'),
+              _buildNavItem(context, 1, Icons.battery_charging_full,
+                  tr('nav_charge'), '/charge'),
+              _buildNavItem(
+                  context, 2, Icons.group, tr('nav_watching'), '/watchers'),
+              _buildNavItem(
+                  context, 3, Icons.settings, tr('nav_settings'), '/settings'),
             ],
           ),
         ),
@@ -40,7 +43,8 @@ class MainNavigationBar extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem(BuildContext context, int index, IconData icon, String label, String route) {
+  Widget _buildNavItem(BuildContext context, int index, IconData icon,
+      String label, String route) {
     final isSelected = currentIndex == index;
     return GestureDetector(
       onTap: () {

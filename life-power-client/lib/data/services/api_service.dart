@@ -20,6 +20,8 @@ final apiServiceProvider = Provider<ApiService>((ref) => ApiService());
 class ApiService {
   final Dio _dio = Dio();
   SharedPreferences? _sharedPrefs;
+  bool _isRefreshing = false;
+  int _refreshFailCount = 0;
 
   ApiService() {
     _dio.options.baseUrl = Constants.baseUrl;
@@ -32,10 +34,10 @@ class ApiService {
         return handler.next(options);
       },
       onError: (DioException error, handler) async {
-        if (error.response?.statusCode == 401) {
-          // Token 过期，尝试刷新
+        if (error.response?.statusCode == 401 && !_isRefreshing) {
           final refreshToken = await _getRefreshToken();
-          if (refreshToken != null) {
+          if (refreshToken != null && _refreshFailCount < 3) {
+            _isRefreshing = true;
             try {
               final response = await _dio.post(
                 '/auth/refresh',
@@ -43,15 +45,25 @@ class ApiService {
               );
               final newToken = response.data['access_token'];
               await _saveToken(newToken);
-              // 重试原请求
+              if (response.data['refresh_token'] != null) {
+                await _saveRefreshToken(response.data['refresh_token']);
+              }
               error.requestOptions.headers['Authorization'] =
                   'Bearer $newToken';
+              _refreshFailCount = 0;
               final retryResponse = await _dio.fetch(error.requestOptions);
+              _isRefreshing = false;
               return handler.resolve(retryResponse);
             } catch (e) {
-              // 刷新失败，跳转到登录
-              await _clearTokens();
+              _refreshFailCount++;
+              _isRefreshing = false;
+              if (_refreshFailCount >= 3) {
+                await _clearTokens();
+                _refreshFailCount = 0;
+              }
             }
+          } else {
+            await _clearTokens();
           }
         }
         return handler.next(error);
@@ -342,7 +354,8 @@ class ApiService {
     return DailyChargeLimit.fromJson(response.data);
   }
 
-  Future<PresignedUrlData> getAvatarPresignedUrl({String contentType = 'image/jpeg'}) async {
+  Future<PresignedUrlData> getAvatarPresignedUrl(
+      {String contentType = 'image/jpeg'}) async {
     final response = await _dio.post(
       '/upload/avatar/presigned-url',
       data: {'content_type': contentType},
@@ -359,7 +372,8 @@ class ApiService {
     String contentType = 'application/octet-stream';
     if (filename.toLowerCase().endsWith('.png')) {
       contentType = 'image/png';
-    } else if (filename.toLowerCase().endsWith('.jpg') || filename.toLowerCase().endsWith('.jpeg')) {
+    } else if (filename.toLowerCase().endsWith('.jpg') ||
+        filename.toLowerCase().endsWith('.jpeg')) {
       contentType = 'image/jpeg';
     } else if (filename.toLowerCase().endsWith('.webp')) {
       contentType = 'image/webp';
@@ -391,7 +405,8 @@ class ApiService {
     return User.fromJson(response.data);
   }
 
-  Future<String> uploadAvatarDirect(Uint8List bytes, String filename, String contentType) async {
+  Future<String> uploadAvatarDirect(
+      Uint8List bytes, String filename, String contentType) async {
     final mimeType = contentType.split('/')[0];
     final subType = contentType.split('/')[1];
     final mediaType = MediaType(mimeType, subType);

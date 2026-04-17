@@ -384,9 +384,124 @@ class WatcherAvatarList extends StatelessWidget {
 class WatcherAvatarData {
   final String name;
   final String? imageUrl;
+  final int? energyScore;
+  final String? energyLevel;
+  final int? energyTrend;
 
   WatcherAvatarData({
     required this.name,
     this.imageUrl,
+    this.energyScore,
+    this.energyLevel,
+    this.energyTrend,
   });
+}
+
+class WatcherAvatarWithEnergy extends StatelessWidget {
+  final WatcherAvatarData data;
+  final double avatarSize;
+  final VoidCallback? onTap;
+
+  const WatcherAvatarWithEnergy({
+    super.key,
+    required this.data,
+    this.avatarSize = 64,
+    this.onTap,
+  });
+
+  Color _getEnergyColor() {
+    switch (data.energyLevel?.toLowerCase()) {
+      case 'high':
+      case 'energetic':
+        return const Color(0xFF006f1d);
+      case 'medium':
+      case 'balanced':
+        return const Color(0xFFfec330);
+      case 'low':
+      case 'low battery':
+        return const Color(0xFF9c4343);
+      default:
+        return const Color(0xFF727d7e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final energyColor = _getEnergyColor();
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            children: [
+              WatcherAvatar(
+                name: data.name,
+                imageUrl: data.imageUrl,
+                size: avatarSize,
+                showGradientBorder: true,
+              ),
+              if (data.energyScore != null)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: energyColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: Text(
+                      '${data.energyScore}%',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            data.name,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF2a3435),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (data.energyTrend != null)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  data.energyTrend! >= 0 ? Icons.trending_up : Icons.trending_down,
+                  size: 12,
+                  color: data.energyTrend! >= 0
+                      ? const Color(0xFF006f1d)
+                      : const Color(0xFF9c4343),
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  '${data.energyTrend! >= 0 ? '+' : ''}${data.energyTrend!}%',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: data.energyTrend! >= 0
+                        ? const Color(0xFF006f1d)
+                        : const Color(0xFF9c4343),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
 }

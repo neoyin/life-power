@@ -43,6 +43,7 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        automaticallyImplyLeading: false,
         title: Text(
           tr('nav_watching'),
           style: const TextStyle(
@@ -375,13 +376,35 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    watcher.fullName ?? watcher.username,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2a3435),
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        watcher.fullName ?? watcher.username,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2a3435),
+                        ),
+                      ),
+                      if (watcher.energyScore != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _getEnergyStatusColor(watcher.energyLevel).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${watcher.energyScore}%${watcher.energyTrend != null ? (watcher.energyTrend >= 0 ? ' ↑' : ' ↓') : ''}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _getEnergyStatusColor(watcher.energyLevel),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 4),
                   EnergyLevelBadge(level: watcher.energyLevel),

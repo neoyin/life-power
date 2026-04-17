@@ -17,6 +17,7 @@ import 'package:life_power_client/presentation/widgets/energy_chart.dart';
 import 'package:life_power_client/presentation/widgets/energy_ring_with_trend.dart';
 import 'package:life_power_client/presentation/widgets/care_banner.dart';
 import 'package:life_power_client/presentation/widgets/skeleton_loading.dart';
+import 'package:life_power_client/presentation/widgets/sync_status_indicator.dart';
 import 'dart:async';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -35,8 +36,7 @@ class _HomePageState extends ConsumerState<HomePage>
   bool _isDataLoaded = false;
   DateTime? _lastWaterTime;
   DateTime? _lastMoodTime;
-  bool _isSyncing = false;
-  bool _showDebugLog = false;
+  SyncStatus _syncStatus = SyncStatus.idle;
   List<String> _logMessages = [];
   Timer? _reminderTimer;
 
@@ -49,6 +49,39 @@ class _HomePageState extends ConsumerState<HomePage>
     'feel_tired': 3,
     'feel_stressed': 1,
   };
+
+  final List<Map<String, dynamic>> _moodOptions = [
+    {
+      'key': 'feel_super',
+      'score': 10,
+      'icon': Icons.sentiment_very_satisfied,
+      'color': const Color(0xFF9d4edd),
+    },
+    {
+      'key': 'feel_calm',
+      'score': 7,
+      'icon': Icons.sentiment_satisfied,
+      'color': const Color(0xFF4ea8de),
+    },
+    {
+      'key': 'feel_normal',
+      'score': 5,
+      'icon': Icons.sentiment_neutral,
+      'color': const Color(0xFF006f1d),
+    },
+    {
+      'key': 'feel_tired',
+      'score': 3,
+      'icon': Icons.sentiment_dissatisfied,
+      'color': const Color(0xFFfec330),
+    },
+    {
+      'key': 'feel_stressed',
+      'score': 1,
+      'icon': Icons.sentiment_very_dissatisfied,
+      'color': const Color(0xFF9c4343),
+    },
+  ];
 
   void _addLog(String message) {
     // 同时输出到 AppLogger 和本地日志列表
@@ -153,7 +186,8 @@ class _HomePageState extends ConsumerState<HomePage>
 
     // Fetch current day's signal from server to restore water/mood
     final dailySignal = await apiService.getDailySignal();
-    debugPrint('[HomePage] _loadData - dailySignal: ${dailySignal?.moodScore}, water: ${dailySignal?.waterIntake}');
+    debugPrint(
+        '[HomePage] _loadData - dailySignal: ${dailySignal?.moodScore}, water: ${dailySignal?.waterIntake}');
 
     if (mounted) {
       setState(() {
@@ -164,7 +198,8 @@ class _HomePageState extends ConsumerState<HomePage>
         if (dailySignal != null) {
           _waterIntake = dailySignal.waterIntake ?? 0;
           _moodScore = dailySignal.moodScore ?? 0;
-          debugPrint('[HomePage] _loadData - setState _moodScore: ${_moodScore}');
+          debugPrint(
+              '[HomePage] _loadData - setState _moodScore: ${_moodScore}');
         }
         _isDataLoaded = true;
       });
@@ -172,9 +207,9 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> _syncHealthData() async {
-    if (_isSyncing) return;
+    if (_syncStatus == SyncStatus.syncing) return;
     _addLog('HomePage: Starting sync process');
-    setState(() => _isSyncing = true);
+    setState(() => _syncStatus = SyncStatus.syncing);
 
     try {
       final healthService = ref.read(healthDataServiceProvider);
@@ -202,17 +237,23 @@ class _HomePageState extends ConsumerState<HomePage>
         setState(() {
           _todaySteps = healthData.steps;
           _sleepHours = healthData.sleepHours ?? 0.0;
-          _isSyncing = false;
+          _syncStatus = SyncStatus.success;
         });
         _addLog(
             'HomePage: Sync completed successfully - steps: ${healthData.steps}, sleepHours: ${healthData.sleepHours}');
+
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted && _syncStatus == SyncStatus.success) {
+            setState(() => _syncStatus = SyncStatus.idle);
+          }
+        });
       } else {
         _addLog('HomePage: No health data to sync');
-        setState(() => _isSyncing = false);
+        setState(() => _syncStatus = SyncStatus.error);
       }
     } catch (e) {
       _addLog('HomePage: Error during sync: $e');
-      setState(() => _isSyncing = false);
+      setState(() => _syncStatus = SyncStatus.error);
     }
   }
 
@@ -264,7 +305,6 @@ class _HomePageState extends ConsumerState<HomePage>
             ),
           ),
           _buildWaterFillingOverlay(),
-          if (_showDebugLog) _buildDebugOverlay(context),
         ],
       ),
       bottomNavigationBar: MainNavigationBar(currentIndex: 0),
@@ -315,6 +355,7 @@ class _HomePageState extends ConsumerState<HomePage>
     return AppBar(
       backgroundColor: Colors.transparent,
       elevation: 0,
+      automaticallyImplyLeading: false,
       title: Row(
         children: [
           Icon(Icons.bubble_chart, color: const Color(0xFF535f6f)),
@@ -327,9 +368,6 @@ class _HomePageState extends ConsumerState<HomePage>
         ],
       ),
       actions: [
-        IconButton(
-            icon: const Icon(Icons.bug_report, color: Color(0xFF727d7e)),
-            onPressed: () => setState(() => _showDebugLog = !_showDebugLog)),
         _buildCareIcon(energyState),
         _buildUserAvatar(authState),
         const SizedBox(width: 16),
@@ -357,14 +395,19 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Widget _buildUserAvatar(authState) {
-    return CircleAvatar(
-        radius: 16,
-        backgroundColor: const Color(0xFFd9e5e6),
-        child: Text(authState.user?.username[0].toUpperCase() ?? '?',
-            style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF535f6f))));
+    final username =
+        authState.user?.fullName ?? authState.user?.username ?? 'User';
+    final avatarUrl = authState.user?.avatarUrl;
+
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/settings'),
+      child: WatcherAvatar(
+        name: username,
+        imageUrl: avatarUrl,
+        size: 32,
+        showGradientBorder: false,
+      ),
+    );
   }
 
   Widget _buildEnergyContent(BuildContext context, EnergyState energyState) {
@@ -457,90 +500,487 @@ class _HomePageState extends ConsumerState<HomePage>
   Widget _buildInsightBentoGrid(BuildContext context, EnergyCurrent energy) {
     return Column(
       children: [
-        GestureDetector(
-            onTap: () => _syncHealthData(), child: _buildMainInsightCard()),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-                child: _buildInsightCard(
-                    icon: Icons.monitor_heart,
-                    iconColor: const Color(0xFFff4d6d),
-                    title: tr('pulse_stability'),
-                    value: '${(energy.confidence * 100).round()}%')),
-            const SizedBox(width: 16),
-            Expanded(
-                child: _buildInsightCard(
-                    icon: Icons.auto_awesome,
-                    iconColor: const Color(0xFFff4d6d),
-                    title: tr('energy_status'),
-                    value: _getEnergyLevelLabel(energy.level))),
-          ],
+        _buildImportantCardsRow(energy),
+        const SizedBox(height: 12),
+        _buildBasicCardsRow(),
+      ],
+    );
+  }
+
+  Widget _buildImportantCardsRow(EnergyCurrent energy) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFFff4d6d).withOpacity(0.1),
+                  const Color(0xFFff4d6d).withOpacity(0.05),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFFff4d6d).withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFff4d6d).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.monitor_heart,
+                        color: Color(0xFFff4d6d),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          tr('pulse_stability').toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF727d7e),
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '${(energy.confidence * 100).round()}%',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2a3435),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  tr('pulse_stability_desc'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF727d7e),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(child: _buildStepsCard()),
-            const SizedBox(width: 16),
-            Expanded(child: _buildSleepCard()),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(child: _buildWaterCard()),
-            const SizedBox(width: 16),
-            Expanded(child: _buildMoodCard()),
-          ],
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.getEnergyColor(energy.level).withOpacity(0.1),
+                  AppTheme.getEnergyColor(energy.level).withOpacity(0.05),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppTheme.getEnergyColor(energy.level).withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.getEnergyColor(energy.level)
+                            .withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.auto_awesome,
+                        color: AppTheme.getEnergyColor(energy.level),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          tr('energy_status').toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF727d7e),
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _getEnergyLevelLabel(energy.level),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.getEnergyColor(energy.level),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  tr('current_energy').toLowerCase(),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF727d7e),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildMainInsightCard() {
+  Widget _buildBasicCardsRow() {
+    return Row(
+      children: [
+        Expanded(child: _buildStepsCard()),
+        const SizedBox(width: 8),
+        Expanded(child: _buildSleepCard()),
+        const SizedBox(width: 8),
+        Expanded(child: _buildWaterCard()),
+        const SizedBox(width: 8),
+        Expanded(child: _buildMoodCard()),
+      ],
+    );
+  }
+
+  Widget _buildStepsCard() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-                color: const Color(0xFF2a3435).withOpacity(0.06),
-                blurRadius: 40,
-                offset: const Offset(0, 20))
-          ]),
+        color: const Color(0xFFf0f4f5),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(Icons.favorite, color: Color(0xFFff4d6d), size: 28),
+              Icon(Icons.directions_walk,
+                  color: const Color(0xFF006f1d), size: 18),
+              const Spacer(),
               Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                      color: const Color(0xFFff4d6d).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20)),
-                  child: Text(tr('synchronized'),
-                      style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFff4d6d),
-                          letterSpacing: 1))),
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: _todaySteps >= Constants.targetSteps
+                      ? const Color(0xFF006f1d)
+                      : const Color(0xFF727d7e),
+                  shape: BoxShape.circle,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Text(tr('heart_mind_harmony'),
-              style: const TextStyle(
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '$_todaySteps',
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF2a3435))),
+                  color: Color(0xFF2a3435),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(width: 2),
+              Text(
+                '/ ${Constants.targetSteps}',
+                style: const TextStyle(fontSize: 10, color: Color(0xFF727d7e)),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            tr('steps'),
+            style: const TextStyle(fontSize: 9, color: Color(0xFF727d7e)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSleepCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFf0f4f5),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.bedtime, color: Color(0xFFfec330), size: 18),
+              const Spacer(),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFfec330),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
-          Text(tr('heart_mind_harmony_desc'),
+          Text(
+            '${_sleepHours.toStringAsFixed(1)}h',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2a3435),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            tr('sleep'),
+            style: TextStyle(fontSize: 9, color: Color(0xFF727d7e)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWaterCard() {
+    return GestureDetector(
+      onTap: _addWaterWithAnimation,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFf0f4f5),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.water_drop,
+                    color: Color(0xFF4ea8de), size: 18),
+                const Spacer(),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: _waterIntake >= 2000
+                        ? const Color(0xFF4ea8de)
+                        : const Color(0xFF727d7e),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${_waterIntake}ml',
               style: const TextStyle(
-                  fontSize: 14, color: Color(0xFF566162), height: 1.5)),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2a3435),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              tr('water'),
+              style: TextStyle(fontSize: 9, color: Color(0xFF727d7e)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoodCard() {
+    return GestureDetector(
+      onTap: _showMoodStatusSelector,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFf0f4f5),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.blur_on, color: Color(0xFF9d4edd), size: 18),
+                const Spacer(),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: _moodScore >= 5
+                        ? const Color(0xFF9d4edd)
+                        : const Color(0xFF727d7e),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _getMoodEmoji(),
+              style: const TextStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              tr('mood'),
+              style: TextStyle(fontSize: 9, color: Color(0xFF727d7e)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getMoodEmoji() {
+    if (_moodScore == 0) return '—';
+    if (_moodScore >= 8) return '😊';
+    if (_moodScore >= 5) return '😐';
+    if (_moodScore >= 3) return '😔';
+    return '😢';
+  }
+
+  Widget _buildMainInsightCard() {
+    return GestureDetector(
+      onTap: _syncStatus == SyncStatus.syncing ? null : _syncHealthData,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                  color: const Color(0xFF2a3435).withOpacity(0.06),
+                  blurRadius: 40,
+                  offset: const Offset(0, 20))
+            ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Icon(Icons.favorite, color: Color(0xFFff4d6d), size: 28),
+                _buildSyncStatusBadge(),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(tr('heart_mind_harmony'),
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2a3435))),
+            const SizedBox(height: 8),
+            Text(tr('heart_mind_harmony_desc'),
+                style: const TextStyle(
+                    fontSize: 14, color: Color(0xFF566162), height: 1.5)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSyncStatusBadge() {
+    Color bgColor;
+    Color textColor;
+    String text;
+    Widget? trailing;
+
+    switch (_syncStatus) {
+      case SyncStatus.idle:
+        bgColor = const Color(0xFFf0f4f5);
+        textColor = const Color(0xFF727d7e);
+        text = tr('sync_idle');
+        break;
+      case SyncStatus.syncing:
+        bgColor = const Color(0xFF4ea8de).withOpacity(0.1);
+        textColor = const Color(0xFF4ea8de);
+        text = tr('sync_syncing');
+        trailing = SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: textColor,
+          ),
+        );
+        break;
+      case SyncStatus.success:
+        bgColor = const Color(0xFF006f1d).withOpacity(0.1);
+        textColor = const Color(0xFF006f1d);
+        text = tr('sync_success');
+        trailing = Icon(Icons.check_circle, size: 14, color: textColor);
+        break;
+      case SyncStatus.error:
+        bgColor = const Color(0xFF9c4343).withOpacity(0.1);
+        textColor = const Color(0xFF9c4343);
+        text = tr('sync_error');
+        trailing = Icon(Icons.refresh, size: 14, color: textColor);
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (trailing != null) ...[
+            trailing,
+            const SizedBox(width: 4),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+              letterSpacing: 1,
+            ),
+          ),
         ],
       ),
     );
@@ -578,131 +1018,6 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  Widget _buildStepsCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-          color: const Color(0xFFf0f4f5),
-          borderRadius: BorderRadius.circular(24)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.directions_walk, color: Color(0xFF006f1d), size: 24),
-          const SizedBox(height: 12),
-          Text(tr('peak_flow').toUpperCase(),
-              style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF566162))),
-          const SizedBox(height: 8),
-          Text('$_todaySteps',
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2a3435))),
-          const SizedBox(height: 4),
-          Text('/ ${Constants.targetSteps} ${tr('steps')}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF566162))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSleepCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-          color: const Color(0xFFf0f4f5),
-          borderRadius: BorderRadius.circular(24)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.bedtime, color: Color(0xFFfec330), size: 24),
-          const SizedBox(height: 12),
-          Text(tr('rest_quality').toUpperCase(),
-              style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF566162))),
-          const SizedBox(height: 8),
-          Text('${_sleepHours.toStringAsFixed(1)}h',
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2a3435))),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWaterCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-          color: const Color(0xFFf0f4f5),
-          borderRadius: BorderRadius.circular(24)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.water_drop, color: Color(0xFF4ea8de), size: 24),
-          const SizedBox(height: 12),
-          Text(tr('water_intake'),
-              style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF566162))),
-          const SizedBox(height: 8),
-          Text('$_waterIntake ml',
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2a3435))),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-              value: (_waterIntake / 2000).clamp(0.0, 1.0),
-              backgroundColor: const Color(0xFFd9e5e6),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(Color(0xFF4ea8de)),
-              minHeight: 6),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMoodCard() {
-    return GestureDetector(
-      onTap: () => _showMoodStatusSelector(),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-            color: const Color(0xFFf0f4f5),
-            borderRadius: BorderRadius.circular(24)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.blur_on, color: Color(0xFF9d4edd), size: 24),
-            const SizedBox(height: 12),
-            Text(tr('mental_state'),
-                style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF566162))),
-            const SizedBox(height: 8),
-            Text(_getCurrentMoodText(),
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2a3435))),
-            const SizedBox(height: 8),
-            Text(tr('tap_to_change_feel'),
-                style: const TextStyle(fontSize: 9, color: Color(0xFF727d7e))),
-          ],
-        ),
-      ),
-    );
-  }
-
   String _getCurrentMoodText() {
     debugPrint('[HomePage] _getCurrentMoodText - _moodScore: $_moodScore');
     if (_moodScore == 0) return tr('not_set');
@@ -728,26 +1043,58 @@ class _HomePageState extends ConsumerState<HomePage>
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 24),
-              ..._feelings.entries
-                  .map((e) => ListTile(
-                        title: Text(tr(e.key),
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w500)),
-                        trailing: _moodScore == e.value
-                            ? const Icon(Icons.check_circle,
-                                color: Color(0xFF9d4edd))
-                            : null,
-                        onTap: () async {
-                          Navigator.pop(context);
-                          setState(() => _moodScore = e.value);
-                          await ref
-                              .read(healthDataServiceProvider)
-                              .updateLastMoodTime();
-                          await _checkReminders();
-                          _syncManualData(_waterIntake, e.value);
-                        },
-                      ))
-                  .toList(),
+              ..._moodOptions.map((option) {
+                final isSelected = _moodScore == option['score'];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? (option['color'] as Color).withOpacity(0.1)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected
+                          ? (option['color'] as Color)
+                          : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  child: ListTile(
+                    leading: Icon(
+                      option['icon'] as IconData,
+                      color: isSelected
+                          ? (option['color'] as Color)
+                          : const Color(0xFF727d7e),
+                      size: 28,
+                    ),
+                    title: Text(
+                      tr(option['key'] as String),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        color: isSelected
+                            ? (option['color'] as Color)
+                            : const Color(0xFF2a3435),
+                      ),
+                    ),
+                    trailing: isSelected
+                        ? Icon(Icons.check_circle,
+                            color: option['color'] as Color)
+                        : null,
+                    onTap: () async {
+                      Navigator.pop(context);
+                      setState(() => _moodScore = option['score'] as int);
+                      await ref
+                          .read(healthDataServiceProvider)
+                          .updateLastMoodTime();
+                      await _checkReminders();
+                      _syncManualData(_waterIntake, option['score'] as int);
+                    },
+                  ),
+                );
+              }).toList(),
               const SizedBox(height: 16),
             ],
           ),
@@ -788,7 +1135,8 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   Future<void> _syncManualData(int water, int mood) async {
-    debugPrint('[HomePage] _syncManualData called - water: $water, mood: $mood');
+    debugPrint(
+        '[HomePage] _syncManualData called - water: $water, mood: $mood');
 
     if (!_isDataLoaded) {
       await _loadHealthData();
@@ -802,7 +1150,8 @@ class _HomePageState extends ConsumerState<HomePage>
 
     if (healthData != null) {
       final latestSignal = await apiService.getDailySignal();
-      debugPrint('[HomePage] _syncManualData - latestSignal mood: ${latestSignal?.moodScore}');
+      debugPrint(
+          '[HomePage] _syncManualData - latestSignal mood: ${latestSignal?.moodScore}');
 
       _addLog(
           'HomePage: Manual sync data - steps: ${healthData.steps}, sleepHours: ${healthData.sleepHours}, activeMinutes: ${healthData.activeMinutes}, waterIntake: $water, moodScore: $mood');
@@ -817,21 +1166,25 @@ class _HomePageState extends ConsumerState<HomePage>
           moodScore: mood > 0 ? mood : (latestSignal?.moodScore),
         ),
       );
-      debugPrint('[HomePage] _syncManualData - createSignal called with moodScore: ${mood > 0 ? mood : (latestSignal?.moodScore)}');
+      debugPrint(
+          '[HomePage] _syncManualData - createSignal called with moodScore: ${mood > 0 ? mood : (latestSignal?.moodScore)}');
 
       await ref.read(energyProvider.notifier).getCurrentEnergy();
 
       _addLog('HomePage: Manual sync completed successfully');
     } else {
-      debugPrint('[HomePage] _syncManualData - healthData is null, trying with minimal data');
-      // 即使没有健康数据，也尝试同步 mood
+      debugPrint(
+          '[HomePage] _syncManualData - healthData is null, trying with minimal data');
+      // 即使没有健康数据，也尝试同步 mood 和 water
       await apiService.createSignal(
         SignalFeatureCreate(
           date: DateTime.now(),
-          moodScore: mood,
+          waterIntake: water,
+          moodScore: mood > 0 ? mood : null,
         ),
       );
-      debugPrint('[HomePage] _syncManualData - createSignal called with moodScore: $mood');
+      debugPrint(
+          '[HomePage] _syncManualData - createSignal called with waterIntake: $water, moodScore: ${mood > 0 ? mood : null}');
     }
   }
 
@@ -879,30 +1232,6 @@ class _HomePageState extends ConsumerState<HomePage>
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.bold))));
-  }
-
-  Widget _buildDebugOverlay(BuildContext context) {
-    return Positioned.fill(
-        child: Container(
-            color: Colors.black.withOpacity(0.7),
-            child: Column(children: [
-              Container(
-                  color: Colors.grey[800],
-                  child: ListTile(
-                      title: const Text('Debug Log',
-                          style: TextStyle(color: Colors.white)),
-                      trailing: IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white),
-                          onPressed: () =>
-                              setState(() => _showDebugLog = false)))),
-              Expanded(
-                  child: ListView.builder(
-                      itemCount: _logMessages.length,
-                      itemBuilder: (context, i) => ListTile(
-                          title: Text(_logMessages[i],
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 12)))))
-            ])));
   }
 
   String _getEnergyLevelLabel(String level) {

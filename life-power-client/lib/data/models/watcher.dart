@@ -63,8 +63,9 @@ class WatcherInfo {
   final String username;
   final String? fullName;
   final String? avatarUrl;
-  final int energyScore;
-  final String energyLevel;
+  final int? energyScore;
+  final String? energyLevel;
+  final int? energyTrend;
   final String status;
 
   WatcherInfo({
@@ -72,8 +73,9 @@ class WatcherInfo {
     required this.username,
     this.fullName,
     this.avatarUrl,
-    required this.energyScore,
-    required this.energyLevel,
+    this.energyScore,
+    this.energyLevel,
+    this.energyTrend,
     required this.status,
   });
 
@@ -85,6 +87,7 @@ class WatcherInfo {
       avatarUrl: json['avatar_url'],
       energyScore: json['energy_score'],
       energyLevel: json['energy_level'],
+      energyTrend: json['energy_trend'],
       status: json['status'],
     );
   }

@@ -25,12 +25,16 @@ class ChargePage extends ConsumerStatefulWidget {
 class _ChargePageState extends ConsumerState<ChargePage> with TickerProviderStateMixin {
   late AnimationController _breathingController;
   late Animation<double> _breathingAnimation;
-  
+  late AnimationController _celebrationController;
+  late Animation<double> _celebrationScale;
+  late Animation<double> _celebrationOpacity;
+
   BreathingState _state = BreathingState.idle;
   int _completedCycles = 0;
   Timer? _preparationTimer;
   String _instructionText = '';
-  
+  bool _showCelebration = false;
+
   bool _mounted = true;
   int _todaySteps = 0;
   double _sleepHours = 0;
@@ -49,6 +53,23 @@ class _ChargePageState extends ConsumerState<ChargePage> with TickerProviderStat
       CurvedAnimation(
         parent: _breathingController,
         curve: Curves.easeInOut,
+      ),
+    );
+
+    _celebrationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _celebrationScale = Tween<double>(begin: 0.5, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _celebrationController,
+        curve: Curves.elasticOut,
+      ),
+    );
+    _celebrationOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _celebrationController,
+        curve: const Interval(0.0, 0.3, curve: Curves.easeIn),
       ),
     );
 
@@ -111,6 +132,7 @@ class _ChargePageState extends ConsumerState<ChargePage> with TickerProviderStat
     _mounted = false;
     _preparationTimer?.cancel();
     _breathingController.dispose();
+    _celebrationController.dispose();
     super.dispose();
   }
 
@@ -169,11 +191,21 @@ class _ChargePageState extends ConsumerState<ChargePage> with TickerProviderStat
     setState(() {
       _state = BreathingState.completed;
       _instructionText = tr('synchronized');
+      _showCelebration = true;
     });
-    
+
+    _celebrationController.forward();
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _showCelebration = false);
+        _celebrationController.reset();
+      }
+    });
+
     // Show motivational feedback
     _showBreathingFeedback();
-    
+
     // Sync and Charge (persistent via incrementBreathing)
     ref.read(api.apiServiceProvider).incrementBreathing().then((_) {
       ref.read(energyProvider.notifier).getCurrentEnergy();
@@ -313,6 +345,7 @@ class _ChargePageState extends ConsumerState<ChargePage> with TickerProviderStat
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        automaticallyImplyLeading: false,
         title: Text(
           tr('nav_charge'),
           style: const TextStyle(
@@ -323,26 +356,93 @@ class _ChargePageState extends ConsumerState<ChargePage> with TickerProviderStat
         ),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 24),
-            _buildTodayProgress(),
-            const SizedBox(height: 32),
-            _buildBreathingButton(),
-            const SizedBox(height: 32),
-            _buildManualChargeButton(),
-            const SizedBox(height: 32),
-            _buildDrainDetails(),
-            const SizedBox(height: 24),
-            _buildZenTip(),
-            const SizedBox(height: 100),
-          ],
-        ),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 24),
+                _buildTodayProgress(),
+                const SizedBox(height: 32),
+                _buildBreathingButton(),
+                const SizedBox(height: 32),
+                _buildManualChargeButton(),
+                const SizedBox(height: 32),
+                _buildDrainDetails(),
+                const SizedBox(height: 24),
+                _buildZenTip(),
+                const SizedBox(height: 100),
+              ],
+            ),
+          ),
+          if (_showCelebration) _buildCelebrationOverlay(),
+        ],
       ),
       bottomNavigationBar: MainNavigationBar(currentIndex: 1),
+    );
+  }
+
+  Widget _buildCelebrationOverlay() {
+    return AnimatedBuilder(
+      animation: _celebrationController,
+      builder: (context, child) {
+        return Positioned.fill(
+          child: Container(
+            color: Colors.black.withOpacity(0.3 * _celebrationOpacity.value),
+            child: Center(
+              child: Transform.scale(
+                scale: _celebrationScale.value,
+                child: Opacity(
+                  opacity: _celebrationOpacity.value,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF006f1d),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF006f1d).withOpacity(0.5),
+                          blurRadius: 30,
+                          spreadRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_circle,
+                          color: Colors.white,
+                          size: 64,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Charging Complete!',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _instructionText,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

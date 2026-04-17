@@ -163,9 +163,22 @@ class _CareBannerManagerState extends State<CareBannerManager> {
   int _currentIndex = 0;
   bool _isDismissed = false;
 
-  String _getTimeAgo(DateTime dateTime) {
+  String _getTimeAgo(dynamic dateTime) {
+    DateTime dt;
+    if (dateTime is DateTime) {
+      dt = dateTime;
+    } else if (dateTime is String) {
+      try {
+        dt = DateTime.parse(dateTime);
+      } catch (e) {
+        return '刚刚';
+      }
+    } else {
+      return '刚刚';
+    }
+
     final now = DateTime.now();
-    final diff = now.difference(dateTime);
+    final diff = now.difference(dt);
 
     if (diff.inMinutes < 1) {
       return '刚刚';

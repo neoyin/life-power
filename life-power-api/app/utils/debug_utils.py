@@ -41,7 +41,7 @@ def object_to_dict(obj: Any) -> dict:
 
     # 如果已经是字典
     if isinstance(obj, dict):
-        return obj
+        return {k: _format_value(v) for k, v in obj.items()}
 
     # datetime 对象
     if isinstance(obj, datetime):
@@ -53,7 +53,7 @@ def object_to_dict(obj: Any) -> dict:
 
     # Pydantic 模型
     if hasattr(obj, 'model_dump'):
-        return obj.model_dump()
+        return _format_value(obj.model_dump())
 
     # SQLAlchemy 模型 - 通过检查是否有 __table__ 属性来判断
     if hasattr(obj, '__table__'):
