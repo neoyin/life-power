@@ -378,12 +378,15 @@ class _WatchersPageState extends ConsumerState<WatchersPage> {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        watcher.fullName ?? watcher.username,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2a3435),
+                      Flexible(
+                        child: Text(
+                          watcher.fullName ?? watcher.username,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2a3435),
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (watcher.energyScore != null) ...[

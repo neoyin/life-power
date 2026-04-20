@@ -421,24 +421,28 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Widget _buildEnergyContent(BuildContext context, EnergyState energyState) {
     final energy = energyState.currentEnergy!;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        children: [
-          const SizedBox(height: 32),
-          _buildEnergyRingSection(context, energy),
-          const SizedBox(height: 32),
-          _buildSuggestionCard(context, energyState),
-          const SizedBox(height: 16),
-          _buildWatcherSection(context, energyState),
-          const SizedBox(height: 32),
-          _buildInsightBentoGrid(context, energy),
-          const SizedBox(height: 32),
-          _buildHistorySection(context, energyState),
-          const SizedBox(height: 32),
-          _buildChargeButton(context),
-          const SizedBox(height: 100),
-        ],
+    return RefreshIndicator(
+      onRefresh: _syncHealthData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          children: [
+            const SizedBox(height: 32),
+            _buildEnergyRingSection(context, energy),
+            const SizedBox(height: 32),
+            _buildSuggestionCard(context, energyState),
+            const SizedBox(height: 16),
+            _buildWatcherSection(context, energyState),
+            const SizedBox(height: 32),
+            _buildInsightBentoGrid(context, energy),
+            const SizedBox(height: 32),
+            _buildHistorySection(context, energyState),
+            const SizedBox(height: 32),
+            _buildChargeButton(context),
+            const SizedBox(height: 100),
+          ],
+        ),
       ),
     );
   }
@@ -687,11 +691,6 @@ class _HomePageState extends ConsumerState<HomePage>
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          Text(
-            SuggestionEngine.getIconEmoji(suggestion.type),
-            style: const TextStyle(fontSize: 28),
-          ),
         ],
       ),
     );
@@ -882,7 +881,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Widget _buildStepsCard() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFf0f4f5),
         borderRadius: BorderRadius.circular(16),
@@ -893,7 +892,7 @@ class _HomePageState extends ConsumerState<HomePage>
           Row(
             children: [
               Icon(Icons.directions_walk,
-                  color: const Color(0xFF006f1d), size: 18),
+                  color: const Color(0xFF006f1d), size: 16),
               const Spacer(),
               Container(
                 width: 6,
@@ -907,27 +906,30 @@ class _HomePageState extends ConsumerState<HomePage>
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                '$_todaySteps',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2a3435),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$_todaySteps',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2a3435),
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(width: 2),
-              Text(
-                '/ ${Constants.targetSteps}',
-                style: const TextStyle(fontSize: 10, color: Color(0xFF727d7e)),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                const SizedBox(width: 2),
+                Text(
+                  '/${Constants.targetSteps}',
+                  style: const TextStyle(fontSize: 9, color: Color(0xFF727d7e)),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 2),
           Text(
@@ -941,7 +943,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Widget _buildSleepCard() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFf0f4f5),
         borderRadius: BorderRadius.circular(16),
@@ -951,7 +953,7 @@ class _HomePageState extends ConsumerState<HomePage>
         children: [
           Row(
             children: [
-              const Icon(Icons.bedtime, color: Color(0xFFfec330), size: 18),
+              const Icon(Icons.bedtime, color: Color(0xFFfec330), size: 16),
               const Spacer(),
               Container(
                 width: 6,
@@ -963,13 +965,17 @@ class _HomePageState extends ConsumerState<HomePage>
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            '${_sleepHours.toStringAsFixed(1)}h',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2a3435),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${_sleepHours.toStringAsFixed(1)}h',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2a3435),
+              ),
             ),
           ),
           const SizedBox(height: 2),
@@ -989,7 +995,7 @@ class _HomePageState extends ConsumerState<HomePage>
       child: AbsorbPointer(
         absorbing: isDisabled,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           decoration: BoxDecoration(
             color:
                 isDisabled ? const Color(0xFFf7f7f7) : const Color(0xFFf0f4f5),
@@ -1005,7 +1011,7 @@ class _HomePageState extends ConsumerState<HomePage>
                     color: isDisabled
                         ? const Color(0xFFc5c9ca)
                         : const Color(0xFF4ea8de),
-                    size: 18,
+                    size: 16,
                   ),
                   const Spacer(),
                   Container(
@@ -1020,15 +1026,17 @@ class _HomePageState extends ConsumerState<HomePage>
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                '${_waterIntake}ml',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDisabled
-                      ? const Color(0xFFa8adaf)
-                      : const Color(0xFF2a3435),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${_waterIntake}ml',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2a3435),
+                  ),
                 ),
               ),
               const SizedBox(height: 2),
@@ -1052,7 +1060,7 @@ class _HomePageState extends ConsumerState<HomePage>
     return GestureDetector(
       onTap: _showMoodStatusSelector,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         decoration: BoxDecoration(
           color: const Color(0xFFf0f4f5),
           borderRadius: BorderRadius.circular(16),
@@ -1062,7 +1070,7 @@ class _HomePageState extends ConsumerState<HomePage>
           children: [
             Row(
               children: [
-                const Icon(Icons.blur_on, color: Color(0xFF9d4edd), size: 18),
+                const Icon(Icons.blur_on, color: Color(0xFF9d4edd), size: 16),
                 const Spacer(),
                 Container(
                   width: 6,
@@ -1076,10 +1084,14 @@ class _HomePageState extends ConsumerState<HomePage>
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              _getMoodEmoji(),
-              style: const TextStyle(fontSize: 18),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _getMoodEmoji(),
+                style: const TextStyle(fontSize: 16),
+              ),
             ),
             const SizedBox(height: 2),
             Text(
@@ -1254,69 +1266,75 @@ class _HomePageState extends ConsumerState<HomePage>
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      isScrollControlled: true,
       builder: (context) {
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(tr('current_mood_prompt'),
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 24),
-              ..._moodOptions.map((option) {
-                final isSelected = _moodScore == option['score'];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? (option['color'] as Color).withOpacity(0.1)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(tr('current_mood_prompt'),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 24),
+                ..._moodOptions.map((option) {
+                  final isSelected = _moodScore == option['score'];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
                       color: isSelected
-                          ? (option['color'] as Color)
+                          ? (option['color'] as Color).withOpacity(0.1)
                           : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
-                  child: ListTile(
-                    leading: Icon(
-                      option['icon'] as IconData,
-                      color: isSelected
-                          ? (option['color'] as Color)
-                          : const Color(0xFF727d7e),
-                      size: 28,
-                    ),
-                    title: Text(
-                      tr(option['key'] as String),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
                         color: isSelected
                             ? (option['color'] as Color)
-                            : const Color(0xFF2a3435),
+                            : Colors.transparent,
+                        width: 2,
                       ),
                     ),
-                    trailing: isSelected
-                        ? Icon(Icons.check_circle,
-                            color: option['color'] as Color)
-                        : null,
-                    onTap: () async {
-                      Navigator.pop(context);
-                      setState(() => _moodScore = option['score'] as int);
-                      await ref
-                          .read(healthDataServiceProvider)
-                          .updateLastMoodTime();
-                      await _checkReminders();
-                      _syncManualData(_waterIntake, option['score'] as int);
-                    },
-                  ),
-                );
-              }).toList(),
-              const SizedBox(height: 16),
-            ],
+                    child: ListTile(
+                      leading: Icon(
+                        option['icon'] as IconData,
+                        color: isSelected
+                            ? (option['color'] as Color)
+                            : const Color(0xFF727d7e),
+                        size: 28,
+                      ),
+                      title: Text(
+                        tr(option['key'] as String),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: isSelected
+                              ? (option['color'] as Color)
+                              : const Color(0xFF2a3435),
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? Icon(Icons.check_circle,
+                              color: option['color'] as Color)
+                          : null,
+                      onTap: () async {
+                        Navigator.pop(context);
+                        setState(() => _moodScore = option['score'] as int);
+                        await ref
+                            .read(healthDataServiceProvider)
+                            .updateLastMoodTime();
+                        await _checkReminders();
+                        _syncManualData(_waterIntake, option['score'] as int);
+                      },
+                    ),
+                  );
+                }).toList(),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         );
       },
