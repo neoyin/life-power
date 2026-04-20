@@ -432,9 +432,7 @@ class _HomePageState extends ConsumerState<HomePage>
             _buildEnergyRingSection(context, energy),
             const SizedBox(height: 32),
             _buildSuggestionCard(context, energyState),
-            const SizedBox(height: 16),
-            _buildWatcherSection(context, energyState),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             _buildInsightBentoGrid(context, energy),
             const SizedBox(height: 32),
             _buildHistorySection(context, energyState),
@@ -459,12 +457,27 @@ class _HomePageState extends ConsumerState<HomePage>
       trendChange,
     );
 
-    return EnergyRingWithTrend(
-      score: energy.score,
-      level: energy.level,
-      trendChange: trendChange,
-      insight: insight,
-      onTap: () => _showEnergyDetail(context, energy, trendChange, insight),
+    return SizedBox(
+      width: double.infinity,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Center(
+            child: EnergyRingWithTrend(
+              score: energy.score,
+              level: energy.level,
+              trendChange: trendChange,
+              insight: insight,
+              onTap: () => _showEnergyDetail(context, energy, trendChange, insight),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            bottom: 20,
+            child: _buildWatcherCompact(context),
+          ),
+        ],
+      ),
     );
   }
 
@@ -563,6 +576,63 @@ class _HomePageState extends ConsumerState<HomePage>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWatcherCompact(BuildContext context) {
+    final myWatchers = ref.read(energyProvider).myWatchers ?? [];
+    final watcherCount = ref.read(energyProvider).currentEnergy?.watcherCount ?? 0;
+
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/watchers'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            WatcherAvatarList(
+              watchers: myWatchers.isEmpty
+                  ? [
+                      WatcherAvatarData(name: 'Demo 1'),
+                      WatcherAvatarData(name: 'Demo 2')
+                    ]
+                  : myWatchers
+                      .map((w) => WatcherAvatarData(
+                          name: w.username, imageUrl: w.avatarUrl))
+                      .toList(),
+              maxDisplay: 3,
+              avatarSize: 28,
+              onAvatarTap: myWatchers.isEmpty
+                  ? null
+                  : (index) {
+                      if (index < myWatchers.length) {
+                        _navigateToWatcherDetail(context, myWatchers[index]);
+                      }
+                    },
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$watcherCount',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF566162),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
