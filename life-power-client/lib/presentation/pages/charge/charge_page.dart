@@ -1562,12 +1562,26 @@ class _ChargePageState extends ConsumerState<ChargePage>
 
   void _performQuickAction(String type) async {
     if (type == 'water') {
-      await _performQuickWaterAction();
+      try {
+        await _performQuickWaterAction();
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isCharging = false);
+        }
+        debugPrint('Error performing quick water action: $e');
+      }
       return;
     }
 
     if (type == 'steps') {
-      await _performQuickStepsAction();
+      try {
+        await _performQuickStepsAction();
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isCharging = false);
+        }
+        debugPrint('Error performing quick steps action: $e');
+      }
       return;
     }
 
@@ -1680,9 +1694,17 @@ class _ChargePageState extends ConsumerState<ChargePage>
 
   // ---------- 区块5: 耗电详情 ----------
   Future<void> _performQuickWaterAction() async {
+    if (_isCharging || _remainingCharges <= 0) return;
+
     final apiService = ref.read(api.apiServiceProvider);
+    
+    setState(() => _isCharging = true);
 
     try {
+      // 1. 先进行能量充电（扣除次数）
+      await ref.read(energyProvider.notifier).chargeEnergy('quick_water');
+      
+      // 2. 如果成功，再更新信号项
       final currentWater = _latestSignal?.waterIntake ?? 0;
       final newWater = currentWater + 250;
 
@@ -1693,26 +1715,26 @@ class _ChargePageState extends ConsumerState<ChargePage>
         ),
       );
 
-      // Synchronize with backend to consume a charge limit
-      await ref.read(energyProvider.notifier).chargeEnergy('quick_water');
-
       if (!mounted) return;
 
-      setState(() {
-        _remainingCharges = ref.read(energyProvider).remainingCharges;
-        _latestSignal = SignalFeature(
-          id: _latestSignal?.id ?? 0,
-          userId: _latestSignal?.userId ?? 0,
-          date: DateTime.now(),
-          steps: _latestSignal?.steps ?? 0,
-          sleepHours: _latestSignal?.sleepHours ?? 0,
-          waterIntake: newWater,
-          moodScore: _latestSignal?.moodScore ?? 5,
-          breathingSessions: _latestSignal?.breathingSessions ?? 0,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
-      });
+      if (mounted) {
+        setState(() {
+          _isCharging = false;
+          _remainingCharges = ref.read(energyProvider).remainingCharges;
+          _latestSignal = SignalFeature(
+            id: _latestSignal?.id ?? 0,
+            userId: _latestSignal?.userId ?? 0,
+            date: DateTime.now(),
+            steps: _latestSignal?.steps ?? 0,
+            sleepHours: _latestSignal?.sleepHours ?? 0,
+            waterIntake: newWater,
+            moodScore: _latestSignal?.moodScore ?? 5,
+            breathingSessions: _latestSignal?.breathingSessions ?? 0,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+        });
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).clearSnackBars();
@@ -1813,11 +1835,19 @@ class _ChargePageState extends ConsumerState<ChargePage>
   }
 
   Future<void> _performQuickStepsAction() async {
+    if (_isCharging || _remainingCharges <= 0) return;
+
     final apiService = ref.read(api.apiServiceProvider);
+    
+    setState(() => _isCharging = true);
 
     try {
+      // 1. 先进行能量充电（扣除次数）
+      await ref.read(energyProvider.notifier).chargeEnergy('quick_steps');
+
+      // 2. 成功后更新信号项
       final currentSteps = _latestSignal?.steps ?? 0;
-      final newSteps = currentSteps + 2000;
+      final newSteps = currentSteps + 500;
 
       await apiService.createSignal(
         SignalFeatureCreate(
@@ -1826,26 +1856,24 @@ class _ChargePageState extends ConsumerState<ChargePage>
         ),
       );
 
-      // Synchronize with backend to consume a charge limit
-      await ref.read(energyProvider.notifier).chargeEnergy('quick_steps');
-
-      if (!mounted) return;
-
-      setState(() {
-        _remainingCharges = ref.read(energyProvider).remainingCharges;
-        _latestSignal = SignalFeature(
-          id: _latestSignal?.id ?? 0,
-          userId: _latestSignal?.userId ?? 0,
-          date: DateTime.now(),
-          steps: newSteps,
-          sleepHours: _latestSignal?.sleepHours ?? 0,
-          waterIntake: _latestSignal?.waterIntake ?? 0,
-          moodScore: _latestSignal?.moodScore ?? 5,
-          breathingSessions: _latestSignal?.breathingSessions ?? 0,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
-      });
+      if (mounted) {
+        setState(() {
+          _isCharging = false;
+          _remainingCharges = ref.read(energyProvider).remainingCharges;
+          _latestSignal = SignalFeature(
+            id: _latestSignal?.id ?? 0,
+            userId: _latestSignal?.userId ?? 0,
+            date: DateTime.now(),
+            steps: newSteps,
+            sleepHours: _latestSignal?.sleepHours ?? 0,
+            waterIntake: _latestSignal?.waterIntake ?? 0,
+            moodScore: _latestSignal?.moodScore ?? 5,
+            breathingSessions: _latestSignal?.breathingSessions ?? 0,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+        });
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).clearSnackBars();

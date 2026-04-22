@@ -114,13 +114,15 @@ class EnergyChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (history.snapshots.isEmpty) return;
 
-    final double height = size.height;
+    // Reserve 18 pixels at the bottom for labels (optimized for 2 lines)
+    final double labelAreaHeight = 18;
+    final double height = size.height - labelAreaHeight;
     final double width = size.width;
     final int count = history.snapshots.length;
     final double stepX = count > 1 ? width / (count - 1) : width;
 
     // Draw horizontal grid lines
-    _drawGridLines(canvas, size);
+    _drawGridLines(canvas, Size(width, height));
 
     // Prepare paths
     final path = Path();
@@ -173,10 +175,12 @@ class EnergyChartPainter extends CustomPainter {
       fillPath.close();
     }
 
+    final shaderRect = Rect.fromLTRB(0, 0, width, height);
+
     final gradient = LinearGradient(
       colors: colors.length > 1 ? colors : [colors[0], colors[0]],
       stops: stops.length > 1 ? stops : [0.0, 1.0],
-    ).createShader(Rect.fromLTRB(0, 0, width, height));
+    ).createShader(shaderRect);
 
     final paint = Paint()
       ..shader = gradient
@@ -192,7 +196,7 @@ class EnergyChartPainter extends CustomPainter {
           _getScoreColor(history.snapshots.last.score).withOpacity(0.3),
           _getScoreColor(history.snapshots.last.score).withOpacity(0.0),
         ],
-      ).createShader(Rect.fromLTRB(0, 0, width, height));
+      ).createShader(shaderRect);
 
     canvas.drawPath(fillPath, fillPaint);
     canvas.drawPath(path, paint);
@@ -213,7 +217,7 @@ class EnergyChartPainter extends CustomPainter {
     }
 
     // Draw X-axis labels
-    _drawXLabels(canvas, size, stepX);
+    _drawXLabels(canvas, Size(width, height), stepX, labelAreaHeight);
   }
 
   Color _getScoreColor(int score) {
@@ -235,31 +239,46 @@ class EnergyChartPainter extends CustomPainter {
     }
   }
 
-  void _drawXLabels(Canvas canvas, Size size, double stepX) {
+  void _drawXLabels(
+      Canvas canvas, Size size, double stepX, double labelAreaHeight) {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     int skip = history.snapshots.length > 20 ? 6 : 2;
     if (history.snapshots.length <= 10) skip = 1;
 
+    DateTime? lastDate;
+
     for (int i = 0; i < history.snapshots.length; i++) {
-      if (i % skip != 0 && i != history.snapshots.length - 1) continue;
+      final date = history.snapshots[i].createdAt.toLocal();
+      bool isFirstOfDay = lastDate == null ||
+          date.year != lastDate.year ||
+          date.month != lastDate.month ||
+          date.day != lastDate.day;
+
+      // Ensure we always check for new day but only paint on skip interval or if it's the first of day
+      if (i % skip != 0 && i != history.snapshots.length - 1 && !isFirstOfDay) {
+        // If it's not the skip interval, just update lastDate and continue
+        if (isFirstOfDay) lastDate = date;
+        continue;
+      }
 
       final x = i * stepX;
-      final date = history.snapshots[i].createdAt.toLocal();
+      String label = DateFormat('HH:mm').format(date);
+      if (isFirstOfDay) {
+        label = DateFormat('MM/dd').format(date) + '\n' + label;
+      }
 
-      final label = DateFormat('MM/dd').format(date) +
-          '\n' +
-          DateFormat('HH:mm').format(date);
+      lastDate = date;
 
       textPainter.textAlign = TextAlign.center;
       textPainter.text = TextSpan(
         text: label,
         style:
-            const TextStyle(color: Color(0xFF727d7e), fontSize: 9, height: 1.2),
+            const TextStyle(color: Color(0xFF727d7e), fontSize: 9, height: 1.0),
       );
       textPainter.layout();
       textPainter.paint(
-          canvas, Offset(x - textPainter.width / 2, size.height + 10));
+          canvas, Offset(x - textPainter.width / 2, size.height + 2));
     }
   }
 
