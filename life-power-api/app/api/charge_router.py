@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.api.deps import get_current_user
 from app.models.user import User as UserModel
-from app.schemas.charge_schema import ChargeResponse
+from app.schemas.charge_schema import ChargeResponse, ChargeHistoryResponse
 from app.services.charge_service import ChargeService
 
 router = APIRouter(prefix="/charge", tags=["charge"])
@@ -31,3 +31,13 @@ def get_daily_charge_limit(
         "daily_charges": daily_charges,
         "remaining_charges": 3 - daily_charges
     }
+
+
+@router.get("/history", response_model=ChargeHistoryResponse)
+def get_charge_history(
+    days: int = Query(default=7, ge=1, le=31),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 获取充电历史统计（最近N天）
+    return ChargeService.get_charge_history(db, current_user.id, days)

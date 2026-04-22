@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:life_power_client/core/i18n.dart';
 
 class ThresholdSlider extends StatelessWidget {
   final double value;
@@ -16,7 +17,7 @@ class ThresholdSlider extends StatelessWidget {
     this.max = 50,
     required this.onChanged,
     this.onChangeEnd,
-    this.label = 'Low Battery Threshold',
+    this.label = '',
     this.unit = '%',
   });
 
@@ -29,7 +30,7 @@ class ThresholdSlider extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              label,
+              label.isNotEmpty ? label : tr('low_battery_threshold'),
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -98,9 +99,9 @@ class ThresholdSlider extends StatelessWidget {
                 letterSpacing: 1,
               ),
             ),
-            const Text(
-              'Safety Zone',
-              style: TextStyle(
+            Text(
+              tr('safety_zone'),
+              style: const TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF727d7e),

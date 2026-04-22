@@ -29,7 +29,7 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   int _todaySteps = 0;
   double _sleepHours = 0.0;
   int _waterIntake = 0;
@@ -57,31 +57,31 @@ class _HomePageState extends ConsumerState<HomePage>
     {
       'key': 'feel_super',
       'score': 10,
-      'icon': Icons.sentiment_very_satisfied,
+      'emoji': '⚡',
       'color': const Color(0xFF9d4edd),
     },
     {
       'key': 'feel_calm',
       'score': 7,
-      'icon': Icons.sentiment_satisfied,
+      'emoji': '🧘',
       'color': const Color(0xFF4ea8de),
     },
     {
       'key': 'feel_normal',
       'score': 5,
-      'icon': Icons.sentiment_neutral,
+      'emoji': '😑',
       'color': const Color(0xFF006f1d),
     },
     {
       'key': 'feel_tired',
       'score': 3,
-      'icon': Icons.sentiment_dissatisfied,
+      'emoji': '📉',
       'color': const Color(0xFFfec330),
     },
     {
       'key': 'feel_stressed',
       'score': 1,
-      'icon': Icons.sentiment_very_dissatisfied,
+      'emoji': '🔥',
       'color': const Color(0xFF9c4343),
     },
   ];
@@ -99,6 +99,7 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _waterAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -108,11 +109,12 @@ class _HomePageState extends ConsumerState<HomePage>
       await ref.read(authProvider.notifier).checkAuthStatus();
       final authState = ref.read(authProvider);
       if (authState.user != null) {
-        ref.read(energyProvider.notifier).getCurrentEnergy();
-        ref.read(energyProvider.notifier).getTodaySignal();
-        ref.read(energyProvider.notifier).getWatchers();
-        ref.read(energyProvider.notifier).getEnergyHistory();
-        ref.read(energyProvider.notifier).getCareMessages();
+        final energyNotifier = ref.read(energyProvider.notifier);
+        energyNotifier.getCurrentEnergy();
+        energyNotifier.getTodaySignal();
+        energyNotifier.getWatchers();
+        energyNotifier.getEnergyHistory();
+        energyNotifier.getCareMessages();
         _loadHealthData();
         _checkReminders();
       }
@@ -125,9 +127,30 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _reminderTimer?.cancel();
     _waterAnimController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    final energyNotifier = ref.read(energyProvider.notifier);
+    energyNotifier.getCurrentEnergy();
+    energyNotifier.getWatchers();
+    energyNotifier.getEnergyHistory();
+    energyNotifier.getCareMessages();
+    
+    // Handle daily signal refresh through the provider
+    await energyNotifier.getTodaySignal(force: true);
+    _loadHealthData();
+    _checkReminders();
   }
 
   Future<void> _checkReminders() async {
@@ -193,18 +216,30 @@ class _HomePageState extends ConsumerState<HomePage>
     await healthService.requestPermissions();
     final healthData = await healthService.syncHealthData();
 
-    // Fetch current day's signal from server to restore water/mood
-    final dailySignal = await apiService.getDailySignal();
+    // Fetch current day's signal via provider to avoid redundant direct API calls
+    await ref.read(energyProvider.notifier).getTodaySignalIfNeeded();
+    final dailySignal = ref.read(energyProvider).todaySignal;
     debugPrint(
-        '[HomePage] _loadData - dailySignal: ${dailySignal?.moodScore}, water: ${dailySignal?.waterIntake}');
+        '[HomePage] _loadData - dailySignal from provider: ${dailySignal?.moodScore}, water: ${dailySignal?.waterIntake}');
 
     if (mounted) {
       setState(() {
         if (healthData != null) {
-          _todaySteps = healthData.steps;
+          final healthSteps = healthData.steps;
+          if (healthSteps > _todaySteps) {
+            _todaySteps = healthSteps;
+          }
           _sleepHours = healthData.sleepHours ?? 0.0;
         }
         if (dailySignal != null) {
+          final apiSteps = dailySignal.steps ?? 0;
+          if (apiSteps > _todaySteps) {
+            _todaySteps = apiSteps;
+          }
+          final apiSleep = dailySignal.sleepHours ?? 0.0;
+          if (apiSleep > _sleepHours) {
+            _sleepHours = apiSleep;
+          }
           _waterIntake = dailySignal.waterIntake ?? 0;
           _moodScore = dailySignal.moodScore ?? 0;
           debugPrint(
@@ -231,20 +266,24 @@ class _HomePageState extends ConsumerState<HomePage>
         _addLog(
             'HomePage: Syncing data - steps: ${healthData.steps}, sleepHours: ${healthData.sleepHours}, activeMinutes: ${healthData.activeMinutes}, waterIntake: $_waterIntake, moodScore: $_moodScore');
 
+        final newSteps = healthData.steps > _todaySteps ? healthData.steps : _todaySteps;
+
         await apiService.createSignal(
           SignalFeatureCreate(
             date: healthData.date,
-            steps: healthData.steps,
+            steps: newSteps,
             sleepHours: healthData.sleepHours,
             activeMinutes: healthData.activeMinutes,
             waterIntake: _waterIntake,
             moodScore: _moodScore > 0 ? _moodScore : null,
           ),
         );
+
+        await ref.read(energyProvider.notifier).getTodaySignal();
         await ref.read(energyProvider.notifier).getCurrentEnergy();
 
         setState(() {
-          _todaySteps = healthData.steps;
+          _todaySteps = newSteps;
           _sleepHours = healthData.sleepHours ?? 0.0;
           _syncStatus = SyncStatus.success;
         });
@@ -586,15 +625,31 @@ class _HomePageState extends ConsumerState<HomePage>
     return GestureDetector(
       onTap: () => Navigator.pushNamed(context, '/watchers'),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white,
+              Colors.white.withOpacity(0.95),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFF9d4edd).withOpacity(0.15),
+            width: 1.5,
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 12,
+              color: const Color(0xFF9d4edd).withOpacity(0.1),
+              blurRadius: 16,
               offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -612,7 +667,7 @@ class _HomePageState extends ConsumerState<HomePage>
                           name: w.username, imageUrl: w.avatarUrl))
                       .toList(),
               maxDisplay: 3,
-              avatarSize: 28,
+              avatarSize: 26,
               onAvatarTap: myWatchers.isEmpty
                   ? null
                   : (index) {
@@ -622,13 +677,27 @@ class _HomePageState extends ConsumerState<HomePage>
                     },
             ),
             const SizedBox(width: 8),
-            Text(
-              '$watcherCount',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF566162),
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$watcherCount',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2a3435),
+                  ),
+                ),
+                Text(
+                  tr('watchers'),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF727d7e),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1176,10 +1245,11 @@ class _HomePageState extends ConsumerState<HomePage>
 
   String _getMoodEmoji() {
     if (_moodScore == 0) return '—';
-    if (_moodScore >= 8) return '😊';
-    if (_moodScore >= 5) return '😐';
-    if (_moodScore >= 3) return '😔';
-    return '😢';
+    if (_moodScore >= 9) return '⚡';
+    if (_moodScore >= 7) return '🧘';
+    if (_moodScore >= 5) return '😑';
+    if (_moodScore >= 3) return '📉';
+    return '🔥';
   }
 
   Widget _buildMainInsightCard() {
@@ -1368,12 +1438,9 @@ class _HomePageState extends ConsumerState<HomePage>
                       ),
                     ),
                     child: ListTile(
-                      leading: Icon(
-                        option['icon'] as IconData,
-                        color: isSelected
-                            ? (option['color'] as Color)
-                            : const Color(0xFF727d7e),
-                        size: 28,
+                      leading: Text(
+                        option['emoji'] as String,
+                        style: const TextStyle(fontSize: 28),
                       ),
                       title: Text(
                         tr(option['key'] as String),

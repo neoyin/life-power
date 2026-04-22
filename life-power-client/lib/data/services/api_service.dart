@@ -354,6 +354,14 @@ class ApiService {
     return DailyChargeLimit.fromJson(response.data);
   }
 
+  Future<ChargeHistory> getChargeHistory({int days = 7}) async {
+    final response = await _dio.get(
+      Constants.chargeHistory,
+      queryParameters: {'days': days},
+    );
+    return ChargeHistory.fromJson(response.data);
+  }
+
   Future<PresignedUrlData> getAvatarPresignedUrl(
       {String contentType = 'image/jpeg'}) async {
     final response = await _dio.post(

@@ -122,6 +122,7 @@ class AppTranslations {
       // Settings
       'battery_alerts': 'Battery Alerts',
       'low_battery_threshold': 'Low Battery Threshold',
+      'safety_zone': 'Safety Zone',
       'watcher_management': 'Watcher Management',
       'privacy_data': 'Privacy & Data',
       'steps_tracking': 'Steps Tracking',
@@ -286,6 +287,7 @@ class AppTranslations {
       // Settings
       'battery_alerts': '电量提醒',
       'low_battery_threshold': '低电量阈值',
+      'safety_zone': '安全区',
       'watcher_management': '守望者管理',
       'privacy_data': '隐私与数据',
       'steps_tracking': '步数追踪',

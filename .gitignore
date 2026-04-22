@@ -2,7 +2,7 @@
 .env
 .env.local
 .env.*.local
-
+.codebuddy/
 # Python - Backend
 life-power-api/__pycache__/
 life-power-api/*.py[cod]

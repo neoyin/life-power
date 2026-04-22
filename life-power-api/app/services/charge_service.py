@@ -1,9 +1,10 @@
-from typing import Optional
-from datetime import datetime, date
+from typing import Optional, List
+from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.models.charge import ManualChargeRecord
 from app.models.energy import EnergySnapshot, SignalFeatureDaily
-from app.schemas.charge_schema import ChargeResponse
+from app.schemas.charge_schema import ChargeResponse, ChargeHistoryResponse, DayChargeSummary
 from app.services.energy_engine import EnergyEngine
 from app.services.signal_service import SignalService
 from app.schemas.energy_schema import SignalFeatureCreate
@@ -90,3 +91,82 @@ class ChargeService:
             ManualChargeRecord.method == "manual",
             ManualChargeRecord.created_at >= datetime.combine(today, datetime.min.time())
         ).count()
+
+    @staticmethod
+    def get_charge_history(db: Session, user_id: int, days: int = 7) -> ChargeHistoryResponse:
+        """
+        获取充电历史统计（最近N天）
+        包含：每日呼吸训练/手动充电次数、总统计、连续打卡天数
+        """
+        today = date.today()
+        start_date = today - timedelta(days=days - 1)
+
+        # 查询手动充电记录（按日期分组聚合）
+        manual_records = db.query(
+            func.date(ManualChargeRecord.created_at).label('date'),
+            func.count(ManualChargeRecord.id).label('count')
+        ).filter(
+            ManualChargeRecord.user_id == user_id,
+            func.date(ManualChargeRecord.created_at) >= start_date,
+            func.date(ManualChargeRecord.created_at) <= today,
+            ManualChargeRecord.method == "manual"
+        ).group_by(func.date(ManualChargeRecord.created_at)).all()
+
+        manual_by_date = {str(r.date): r.count for r in manual_records}
+
+        # 查询信号特征中的呼吸训练会话数（按日期分组）
+        breathing_records = db.query(
+            func.date(SignalFeatureDaily.date).label('date'),
+            SignalFeatureDaily.breathing_sessions
+        ).filter(
+            SignalFeatureDaily.user_id == user_id,
+            SignalFeatureDaily.date >= datetime.combine(start_date, datetime.min.time()),
+            SignalFeatureDaily.date <= datetime.combine(today, datetime.max.time()),
+            SignalFeatureDaily.breathing_sessions.isnot(None),
+            SignalFeatureDaily.breathing_sessions > 0
+        ).all()
+
+        breathing_by_date = {str(r.date): r.breathing_sessions for r in breathing_records}
+
+        # 构建每日摘要
+        daily_summaries: List[DayChargeSummary] = []
+        total_breathing = 0
+        total_manual = 0
+        streak_days = 0
+        current_streak = 0
+
+        for i in range(days):
+            day = today - timedelta(days=days - 1 - i)
+            day_str = str(day)
+            breathing = breathing_by_date.get(day_str, 0) or 0
+            manual = manual_by_date.get(day_str, 0) or 0
+            day_total = breathing + manual
+            has_activity = day_total > 0
+
+            daily_summaries.append(DayChargeSummary(
+                date=day_str,
+                breathing_count=breathing,
+                manual_count=manual,
+                total_charges=day_total,
+                has_activity=has_activity
+            ))
+
+            total_breathing += breathing
+            total_manual += manual
+
+            # 计算连续天数（从今天往前倒序）
+            if has_activity:
+                current_streak += 1
+                if i < days:  # 不算未来日期
+                    streak_days = current_streak
+            else:
+                current_streak = 0
+
+        return ChargeHistoryResponse(
+            days=days,
+            total_breathing=total_breathing,
+            total_manual=total_manual,
+            total_charges=total_breathing + total_manual,
+            streak_days=streak_days,
+            daily_summaries=daily_summaries
+        )

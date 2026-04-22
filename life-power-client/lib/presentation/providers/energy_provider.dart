@@ -2,10 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_power_client/data/models/energy.dart';
 import 'package:life_power_client/data/models/watcher.dart';
 import 'package:life_power_client/data/services/api_service.dart';
-import 'package:life_power_client/data/models/charge.dart';
 import 'package:life_power_client/data/models/user.dart';
 
-final energyProvider = StateNotifierProvider<EnergyNotifier, EnergyState>((ref) {
+final energyProvider =
+    StateNotifierProvider<EnergyNotifier, EnergyState>((ref) {
   return EnergyNotifier(ref.watch(apiServiceProvider));
 });
 
@@ -86,7 +86,8 @@ class EnergyNotifier extends StateNotifier<EnergyState> {
     }
   }
 
-  Future<void> getTodaySignal() async {
+  Future<void> getTodaySignal({bool force = false}) async {
+    if (state.isLoading && !force) return;
     state = state.copyWith(isLoading: true, error: null);
     try {
       final signal = await _apiService.getDailySignal();
@@ -94,6 +95,11 @@ class EnergyNotifier extends StateNotifier<EnergyState> {
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  Future<void> getTodaySignalIfNeeded() async {
+    if (state.todaySignal != null) return;
+    await getTodaySignal();
   }
 
   Future<void> createSignal(SignalFeatureCreate signal) async {
@@ -111,9 +117,9 @@ class EnergyNotifier extends StateNotifier<EnergyState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final response = await _apiService.manualCharge(method: method);
-      // 重新获取当前能量
+      // getCurrentEnergy 会更新 currentEnergy，我们只需要更新 remainingCharges
       await getCurrentEnergy();
-      // 更新剩余充电次数
+      // 更新剩余充电次数（getCurrentEnergy 之后状态已更新，这里只更新次数）
       state = state.copyWith(
         remainingCharges: response.remainingCharges,
         isLoading: false,
@@ -163,7 +169,8 @@ class EnergyNotifier extends StateNotifier<EnergyState> {
   Future<void> sendCareMessage(int recipientId, String content) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      await _apiService.sendCareMessage(CareMessageCreate(recipientId: recipientId, content: content));
+      await _apiService.sendCareMessage(
+          CareMessageCreate(recipientId: recipientId, content: content));
       // 重新获取消息列表
       await getCareMessages();
     } catch (e) {

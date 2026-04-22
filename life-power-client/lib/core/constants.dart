@@ -21,6 +21,7 @@ class Constants {
   static const String careMessageSent = '/care/messages/sent';
   static const String chargeManual = '/charge/manual';
   static const String chargeDailyLimit = '/charge/daily-limit';
+  static const String chargeHistory = '/charge/history';
 
   // 能量等级
   static const String energyHigh = 'high';
